@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/lighthouse.gd" id="1_lighthouse"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_island"]
+radius = 48.0
+
+[node name="Lighthouse" type="Node2D"]
+script = ExtResource("1_lighthouse")
+
+[node name="IslandBody" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="IslandBody"]
+shape = SubResource("CircleShape2D_island")

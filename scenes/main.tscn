@@ -1,0 +1,141 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/game_manager.gd" id="2_manager"]
+[ext_resource type="PackedScene" path="res://scenes/player_boat.tscn" id="3_boat"]
+[ext_resource type="PackedScene" path="res://scenes/survivor.tscn" id="4_survivor"]
+[ext_resource type="PackedScene" path="res://scenes/lighthouse.tscn" id="5_light"]
+[ext_resource type="PackedScene" path="res://scenes/harbor.tscn" id="6_harbor"]
+[ext_resource type="PackedScene" path="res://scenes/rock.tscn" id="7_rock"]
+
+[sub_resource type="RectangleShape2D" id="Shape_horizontal"]
+size = Vector2(1116, 12)
+
+[sub_resource type="RectangleShape2D" id="Shape_vertical"]
+size = Vector2(12, 452)
+
+[node name="OneLastLight" type="Node2D"]
+process_mode = 3
+script = ExtResource("1_main")
+
+[node name="World" type="Node2D" parent="."]
+process_mode = 1
+
+[node name="Bounds" type="StaticBody2D" parent="World"]
+collision_layer = 1
+collision_mask = 2
+
+[node name="North" type="CollisionShape2D" parent="World/Bounds"]
+position = Vector2(576, 116)
+shape = SubResource("Shape_horizontal")
+
+[node name="South" type="CollisionShape2D" parent="World/Bounds"]
+position = Vector2(576, 568)
+shape = SubResource("Shape_horizontal")
+
+[node name="West" type="CollisionShape2D" parent="World/Bounds"]
+position = Vector2(24, 342)
+shape = SubResource("Shape_vertical")
+
+[node name="East" type="CollisionShape2D" parent="World/Bounds"]
+position = Vector2(1128, 342)
+shape = SubResource("Shape_vertical")
+
+[node name="Lighthouse" parent="World" instance=ExtResource("5_light")]
+position = Vector2(540, 332)
+
+[node name="Harbor" parent="World" instance=ExtResource("6_harbor")]
+position = Vector2(1038, 342)
+
+[node name="Rocks" type="Node2D" parent="World"]
+
+[node name="ReefEast" parent="World/Rocks" instance=ExtResource("7_rock")]
+position = Vector2(900, 310)
+radius = 29.0
+
+[node name="ReefSoutheast" parent="World/Rocks" instance=ExtResource("7_rock")]
+position = Vector2(780, 450)
+radius = 28.0
+
+[node name="ReefNortheast" parent="World/Rocks" instance=ExtResource("7_rock")]
+position = Vector2(720, 240)
+radius = 30.0
+
+[node name="ReefWest" parent="World/Rocks" instance=ExtResource("7_rock")]
+position = Vector2(365, 325)
+radius = 32.0
+
+[node name="ReefSouthwest" parent="World/Rocks" instance=ExtResource("7_rock")]
+position = Vector2(195, 424)
+radius = 27.0
+
+[node name="ReefNorthwest" parent="World/Rocks" instance=ExtResource("7_rock")]
+position = Vector2(245, 230)
+radius = 25.0
+
+[node name="ReefSouth" parent="World/Rocks" instance=ExtResource("7_rock")]
+position = Vector2(614, 459)
+radius = 23.0
+
+[node name="ReefNorth" parent="World/Rocks" instance=ExtResource("7_rock")]
+position = Vector2(465, 150)
+radius = 22.0
+
+[node name="Survivors" type="Node2D" parent="World"]
+
+[node name="Survivor01" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(884, 420)
+survivor_id = 1
+oxygen_duration = 72.0
+
+[node name="Survivor02" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(846, 218)
+survivor_id = 2
+oxygen_duration = 96.0
+
+[node name="Survivor03" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(701, 492)
+survivor_id = 3
+oxygen_duration = 88.0
+
+[node name="Survivor04" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(677, 156)
+survivor_id = 4
+oxygen_duration = 112.0
+
+[node name="Survivor05" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(405, 190)
+survivor_id = 5
+oxygen_duration = 100.0
+
+[node name="Survivor06" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(156, 166)
+survivor_id = 6
+oxygen_duration = 132.0
+
+[node name="Survivor07" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(98, 360)
+survivor_id = 7
+oxygen_duration = 150.0
+
+[node name="Survivor08" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(267, 498)
+survivor_id = 8
+oxygen_duration = 124.0
+
+[node name="Survivor09" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(418, 470)
+survivor_id = 9
+oxygen_duration = 85.0
+
+[node name="Survivor10" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(780, 351)
+survivor_id = 10
+oxygen_duration = 65.0
+
+[node name="PlayerBoat" parent="World" instance=ExtResource("3_boat")]
+position = Vector2(1020, 342)
+
+[node name="GameManager" type="Node" parent="."]
+process_mode = 1
+script = ExtResource("2_manager")
