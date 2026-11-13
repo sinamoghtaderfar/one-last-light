@@ -11,6 +11,7 @@ const GOLD := Color("ffda92")
 
 @onready var manager: RescueGameManager = $GameManager
 @onready var boat: RescueBoat = $World/PlayerBoat
+@onready var emergency: EmergencyBoat = $World/EmergencyBoat
 @onready var lighthouse: Lighthouse = $World/Lighthouse
 @onready var harbor: Harbor = $World/Harbor
 var survivors: Array[Survivor] = []
@@ -22,10 +23,12 @@ var _notice: Label
 var _round_label: Label
 var _menu: Control
 var _menu_box: VBoxContainer
-var _capacity_button: Button
+var _emergency_label: Label
+var _purchase_feedback: Label
 var _speed_button: Button
 var _bank_label: Label
 var _notice_time: float = 0.0
+var _notice_priority: int = 0
 var _paused: bool = false
 
 
@@ -38,7 +41,7 @@ func _ready() -> void:
 	manager.state_changed.connect(_refresh_hud)
 	manager.round_started.connect(_on_round_started)
 	manager.round_ended.connect(_show_results)
-	manager.configure(boat, lighthouse, harbor, survivors)
+	manager.configure(boat, lighthouse, harbor, survivors, emergency)
 	_show_intro()
 	queue_redraw()
 
@@ -49,8 +52,8 @@ func _process(delta: float) -> void:
 	if not _paused and manager.round_active:
 		_notice_time = maxf(_notice_time - delta, 0.0)
 		if _notice_time == 0.0:
-			_notice.text = "Rescue priority: oxygen remaining · travel distance · open seats"
-			_notice.modulate = MUTED
+			_notice.text = ""
+			_notice.self_modulate = MUTED
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -60,6 +63,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact") and manager.round_active and not _paused:
 		manager.try_interact()
 		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		if manager.round_active and not _paused:
+			manager.dispatch_at(get_canvas_transform().affine_inverse() * event.position)
+			get_viewport().set_input_as_handled()
 
 
 func _draw() -> void:
@@ -81,7 +88,7 @@ func _draw() -> void:
 	# Orientation marks and sea chart boundary remain readable at a glance.
 	draw_rect(SEA_RECT, Color("35505d"), false, 1.0)
 	draw_string(ThemeDB.fallback_font, Vector2(42, 144), "SEARCH AREA 01", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, MUTED)
-	draw_string(ThemeDB.fallback_font, Vector2(42, 552), "10 DISTRESS CONTACTS / ROCKY WATERS", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("6d8998"))
+	draw_string(ThemeDB.fallback_font, Vector2(42, 552), "15 DISTRESS CONTACTS / ROCKY WATERS", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("6d8998"))
 	draw_string(ThemeDB.fallback_font, Vector2(1093, 146), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, MUTED)
 	draw_line(Vector2(1098, 173), Vector2(1098, 152), MUTED, 1.0, true)
 	draw_line(Vector2(1098, 152), Vector2(1093, 160), MUTED, 1.0, true)
@@ -98,24 +105,24 @@ func _build_hud() -> void:
 	var title := _label("ONE LAST LIGHT", 21, TEXT)
 	title.position = Vector2(16, 5)
 	top.add_child(title)
-	_round_label = _label("GRAYBOX 0.1  /  RESCUE 01", 11, MUTED)
-	_round_label.position = Vector2(768, 12)
-	_round_label.size.x = 334
-	_round_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_emergency_label = _label("", 15, TEAL)
+	_emergency_label.position = Vector2(298, 9)
+	top.add_child(_emergency_label)
+	_round_label = _label("LEVEL 1", 14, MUTED)
+	_round_label.position = Vector2(994, 9)
 	top.add_child(_round_label)
-	var captions: Array[String] = ["ABOARD", "DELIVERED", "LOST", "IN THE WATER", "STAR BANK", "ELAPSED"]
+	var captions: Array[String] = ["TIME", "ABOARD", "MAIN", "EMERGENCY", "DELIVERED", "LOST", "IN THE WATER", "STAR BANK"]
 	for index in range(captions.size()):
-		var card := HBoxContainer.new()
-		card.position = Vector2(16 + index * 184, 46)
-		card.size = Vector2(170, 34)
-		card.add_theme_constant_override("separation", 12)
-		top.add_child(card)
-		var value := _label("0", 24, TEAL if index < 2 else TEXT)
-		value.custom_minimum_size.x = 48
-		card.add_child(value)
-		var caption := _label(captions[index], 10, MUTED)
-		caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		card.add_child(caption)
+		var column_x := 16 + index * 139
+		var caption_text := captions[index]
+		if caption_text in ["MAIN", "EMERGENCY"]:
+			caption_text += " SAVES"
+		var caption := _label(caption_text, 11, MUTED)
+		caption.position = Vector2(column_x, 40)
+		top.add_child(caption)
+		var value := _label("0", 22, TEXT)
+		value.position = Vector2(column_x, 55)
+		top.add_child(value)
 		_stat_labels[captions[index]] = value
 	var bottom := _panel_at(Rect2(16, 580, 1120, 56), PANEL)
 	_hud.add_child(bottom)
@@ -123,39 +130,56 @@ func _build_hud() -> void:
 	_context.position = Vector2(16, 6)
 	_context.size.x = 1080
 	bottom.add_child(_context)
-	_notice = _label("", 12, MUTED)
+	_notice = _label("", 12, Color.WHITE)
 	_notice.position = Vector2(16, 31)
 	_notice.size.x = 1080
 	bottom.add_child(_notice)
 
 
 func _refresh_hud() -> void:
-	if _stat_labels.is_empty():
+	if _stat_labels.is_empty() or manager.emergency == null:
 		return
 	_stat_labels["ABOARD"].text = "%d/%d" % [boat.passengers.size(), boat.capacity]
 	_stat_labels["ABOARD"].modulate = GOLD if boat.is_full() else TEAL
+	_stat_labels["MAIN"].text = str(manager.main_delivered)
+	_stat_labels["EMERGENCY"].text = str(manager.emergency_delivered)
 	_stat_labels["DELIVERED"].text = str(manager.rescued_count)
-	_stat_labels["LOST"].text = str(manager.lost_count)
+	_stat_labels["LOST"].text = "%d/%d" % [manager.lost_count, manager.loss_limit]
 	_stat_labels["IN THE WATER"].text = str(manager.active_count())
 	_stat_labels["STAR BANK"].text = str(manager.stars)
 	_stat_labels["STAR BANK"].modulate = GOLD
-	_stat_labels["ELAPSED"].text = "%02d:%02d" % [floori(manager.elapsed_time / 60.0), int(manager.elapsed_time) % 60]
+	var seconds := ceili(manager.time_remaining)
+	_stat_labels["TIME"].text = "%d:%02d" % [floori(seconds / 60.0), seconds % 60]
+	_stat_labels["TIME"].modulate = GOLD if seconds <= 30 else TEXT
+	_emergency_label.text = "Emergency boat   %d/%d   ·   %s" % [emergency.passengers.size(), emergency.capacity, emergency.state_text()]
+	if is_instance_valid(emergency.target):
+		_emergency_label.text += "   #%02d" % emergency.target.survivor_id
+	elif emergency.state == EmergencyBoat.State.COOLDOWN:
+		_emergency_label.text += "   %ds" % ceili(emergency.cooldown_remaining)
 	_context.text = manager.context_hint()
-	_round_label.text = "GRAYBOX 0.1  /  RESCUE %02d  /  %d MARKED" % [manager.round_index, manager.discovered_count()]
+	_round_label.text = "LEVEL %d" % manager.round_index
 	_refresh_shop()
 
 
 func _on_notification(message: String, tone: String) -> void:
+	var priority := 0 if tone == "info" else 1
+	if tone == "danger":
+		priority = 2
+	if priority < _notice_priority and _notice_time > 0.0:
+		return
+	_notice_priority = priority
 	_notice.text = message
-	_notice_time = 5.0
+	_notice_time = 2.5
 	match tone:
-		"success": _notice.modulate = TEAL
-		"warning": _notice.modulate = GOLD
-		"danger": _notice.modulate = Color("fa958a")
-		_: _notice.modulate = MUTED
+		"success": _notice.self_modulate = TEAL
+		"warning": _notice.self_modulate = GOLD
+		"danger": _notice.self_modulate = Color("fa958a")
+		_: _notice.self_modulate = MUTED
 
 
 func _on_round_started() -> void:
+	_notice_time = 0.0
+	_notice_priority = 0
 	_paused = false
 	get_tree().paused = false
 	_clear_menu()
@@ -163,16 +187,15 @@ func _on_round_started() -> void:
 
 func _show_intro() -> void:
 	_open_menu()
-	_add_menu_label("RESCUE OPERATIONS / 01", 12, TEAL)
+	_add_menu_label("LEVEL 1    /    ROCKY WATERS", 13, TEAL)
 	_add_menu_label("One Last Light", 36, TEXT)
-	_add_menu_label("Ten lives in the water. Three seats aboard.\nEvery journey back is a decision.", 18, MUTED)
+	_add_menu_label("Find all 15 survivors. Deliver every living passenger within four minutes.\nYou can lose up to two people. A third loss ends the rescue.", 18, TEXT)
 	_menu_box.add_child(HSeparator.new())
-	_add_menu_label("DETECT → PRIORITIZE → RESCUE → RETURN → UPGRADE", 12, GOLD)
-	_add_menu_label("The lighthouse sweeps the sea automatically. Illuminated survivors\nstay marked, with their oxygen time visible beside them.\n\nSteer close and press E to bring a survivor aboard. Their oxygen\nstops, but stars are earned only after delivery at the right-hand harbor.", 15, TEXT)
-	_add_menu_label("WASD / ARROWS   Move     E   Pick up / unload     ESC   Pause", 13, MUTED)
+	_add_menu_label("Aim the lighthouse with your mouse to read oxygen times.\nContacts fade after three seconds. Press E within pickup range, even in darkness.", 15, MUTED)
+	_add_menu_label("Steer with WASD or arrows. Press E near a survivor to pick them up.\nYour boat seats two. Press E at the harbor to earn %d stars per person." % manager.stars_per_survivor, 15, TEXT)
+	_add_menu_label("Right-click a visible survivor to dispatch the one-seat emergency boat.\nIt returns on its own and saves a life for zero stars.", 15, TEXT)
 	var launch := _button("LAUNCH RESCUE", _launch_first_round)
 	_menu_box.add_child(launch)
-	_add_menu_label("Game Production and Management · WS 2026/27 · Prototype 0.1", 10, MUTED)
 	launch.grab_focus()
 
 
@@ -182,56 +205,48 @@ func _launch_first_round() -> void:
 
 func _show_results() -> void:
 	_open_menu()
-	_add_menu_label("RESCUE %02d / DEBRIEF" % manager.round_index, 12, TEAL)
-	var heading := "Every light brought home" if manager.rescued_count == survivors.size() else "The search is over"
-	_add_menu_label(heading, 30, TEXT)
-	_add_menu_label("%d / %d delivered   ·   %d lost   ·   %02d:%02d elapsed" % [manager.rescued_count, survivors.size(), manager.lost_count, floori(manager.elapsed_time / 60.0), int(manager.elapsed_time) % 60], 17, MUTED)
-	_bank_label = _add_menu_label("", 22, GOLD)
-	_add_menu_label("Spend your stars before launching another round.", 14, MUTED)
-	_capacity_button = _button("", _buy_capacity)
-	_menu_box.add_child(_capacity_button)
+	match manager.result:
+		RescueGameManager.Result.VICTORY:
+			_add_menu_label("LEVEL 1 COMPLETE", 14, TEAL)
+			_add_menu_label("Survivors brought to safety", 28, TEXT)
+		RescueGameManager.Result.TOO_MANY_LOST:
+			_add_menu_label("GAME OVER – Too Many Survivors Lost", 27, Color("fa958a"))
+		RescueGameManager.Result.TIME_RAN_OUT:
+			_add_menu_label("GAME OVER – Time Ran Out", 27, Color("fa958a"))
+	_add_menu_label("%d of %d rescued   ·   %d lost   ·   %d still in the water   ·   %d aboard" % [manager.rescued_count, survivors.size(), manager.lost_count, manager.active_count(), boat.passengers.size() + emergency.passengers.size()], 16, TEXT)
+	_add_menu_label("Main boat   %d     /     Emergency boat   %d" % [manager.main_delivered, manager.emergency_delivered], 15, MUTED)
+	_menu_box.add_child(HSeparator.new())
+	_bank_label = _add_menu_label("", 20, GOLD)
 	_speed_button = _button("", _buy_speed)
 	_menu_box.add_child(_speed_button)
-	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 12)
-	_menu_box.add_child(actions)
-	var retry := _button("RETRY ROUND", _retry_round)
-	retry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	actions.add_child(retry)
-	var next := _button("NEXT ROUND →", _next_round)
-	next.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	actions.add_child(next)
-	_add_menu_label("The same sea, a better boat. Banked stars and upgrades carry over.\nNo survivors remain aboard; every rescue counted here reached safety.", 12, MUTED)
+	_purchase_feedback = _add_menu_label("Purchased speed carries into your next launch.", 13, MUTED)
+	var retry := _button("REPLAY LEVEL 1", _retry_round)
+	_menu_box.add_child(retry)
 	_refresh_shop()
-	next.grab_focus()
+	retry.grab_focus()
 
 
 func _refresh_shop() -> void:
-	if not is_instance_valid(_capacity_button):
+	if not is_instance_valid(_speed_button):
 		return
 	_bank_label.text = "%d STARS AVAILABLE" % manager.stars
-	var capacity_maxed: bool = manager.capacity_level >= manager.maximum_upgrade_level
-	var speed_maxed: bool = manager.speed_level >= manager.maximum_upgrade_level
-	_capacity_button.text = "CAPACITY  %d → %d seats    /    %d stars" % [boat.capacity, boat.capacity + 1, manager.capacity_cost()] if not capacity_maxed else "CAPACITY  %d seats    /    MAXIMUM REACHED" % boat.capacity
-	_speed_button.text = "SPEED  +%d%% → +%d%%    /    %d stars" % [roundi(manager.speed_level * boat.speed_bonus_per_level * 100), roundi((manager.speed_level + 1) * boat.speed_bonus_per_level * 100), manager.speed_cost()] if not speed_maxed else "SPEED  +%d%%    /    MAXIMUM REACHED" % roundi(manager.speed_level * boat.speed_bonus_per_level * 100)
-	_capacity_button.disabled = capacity_maxed or manager.stars < manager.capacity_cost()
+	var speed_maxed := manager.speed_level >= manager.economy.maximum_upgrade_level
+	var bonus := roundi(manager.speed_level * boat.speed_bonus_per_level * 100)
+	if speed_maxed:
+		_speed_button.text = "MAIN BOAT SPEED   +%d%%   /   MAXIMUM REACHED" % bonus
+	else:
+		var next_bonus := roundi((manager.speed_level + 1) * boat.speed_bonus_per_level * 100)
+		_speed_button.text = "MAIN BOAT SPEED   +%d%% → +%d%%    /    %d stars" % [bonus, next_bonus, manager.speed_cost()]
 	_speed_button.disabled = speed_maxed or manager.stars < manager.speed_cost()
 
 
-func _buy_capacity() -> void:
-	manager.buy_capacity_upgrade()
-
-
 func _buy_speed() -> void:
-	manager.buy_speed_upgrade()
+	if manager.buy_speed_upgrade():
+		_purchase_feedback.text = "Upgrade purchased. Main boat speed is now %d px/s." % roundi(boat.base_speed * boat.speed_multiplier)
 
 
 func _retry_round() -> void:
 	manager.restart_round()
-
-
-func _next_round() -> void:
-	manager.next_round()
 
 
 func _toggle_pause() -> void:
@@ -241,7 +256,7 @@ func _toggle_pause() -> void:
 		_open_menu()
 		_add_menu_label("OPERATIONS PAUSED", 12, TEAL)
 		_add_menu_label("Take a bearing", 32, TEXT)
-		_add_menu_label("Oxygen, boat movement, and the lighthouse are paused.\nReturn passengers to the safe zone on the right and press E.\nOnly delivered survivors earn stars.", 16, MUTED)
+		_add_menu_label("The level clock, oxygen, lighthouse and both boats are paused.", 16, MUTED)
 		var resume := _button("RESUME RESCUE", _toggle_pause)
 		_menu_box.add_child(resume)
 		_add_menu_label("WASD / ARROWS  Move  ·  E  Rescue / unload  ·  ESC  Resume", 12, MUTED)
@@ -279,7 +294,7 @@ func _open_menu() -> void:
 
 
 func _clear_menu() -> void:
-	_capacity_button = null
+	_purchase_feedback = null
 	_speed_button = null
 	_bank_label = null
 	if is_instance_valid(_menu):

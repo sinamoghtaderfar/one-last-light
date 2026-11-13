@@ -8,7 +8,7 @@ import hashlib
 
 def main() -> None:
     project = Path(__file__).resolve().parents[1]
-    destination = project.parent / "OneLastLight_Graybox_v0.1.zip"
+    destination = project.parent / "OneLastLight_Graybox_v0.2.zip"
     excluded = {".godot", ".git", "builds", "__pycache__"}
     sources = sorted(
         path
@@ -19,7 +19,7 @@ def main() -> None:
     )
     with ZipFile(destination, "w", ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sources:
-            archive.write(path, path.relative_to(project.parent))
+            archive.write(path, Path("OneLastLight") / path.relative_to(project))
     with ZipFile(destination) as archive:
         failure = archive.testzip()
         if failure:

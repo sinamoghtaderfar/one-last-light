@@ -7,15 +7,17 @@ signal picked_up(survivor: Survivor)
 signal transported(survivor: Survivor)
 signal lost(survivor: Survivor)
 
-enum State { ACTIVE, RESCUED, TRANSPORTED, LOST }
+enum State { ACTIVE, ON_MAIN_BOAT, ON_EMERGENCY_BOAT, DELIVERED, LOST }
 
 @export var oxygen_duration: float = 120.0
 @export var survivor_id: int = 1
+@export var visibility_memory_duration: float = 3.0
 
 var oxygen_remaining: float = 120.0
 var discovered: bool = false
 var state: State = State.ACTIVE
 var _pulse_time: float = 0.0
+var _memory_remaining: float = 0.0
 
 
 func _ready() -> void:
@@ -23,67 +25,77 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if state != State.ACTIVE:
+		return
 	_pulse_time = maxf(_pulse_time - delta, 0.0)
-	if state == State.ACTIVE:
-		oxygen_remaining = maxf(oxygen_remaining - delta, 0.0)
-		if oxygen_remaining <= 0.0:
-			state = State.LOST
-			lost.emit(self)
-	queue_redraw()
+	oxygen_remaining = maxf(oxygen_remaining - delta, 0.0)
+	if oxygen_remaining <= 0.0:
+		state = State.LOST
+		_hide_contact()
+		lost.emit(self)
+	elif visible:
+		queue_redraw()
+
+
+func update_visibility(detected: bool, delta: float) -> void:
+	if state != State.ACTIVE:
+		return
+	if detected:
+		discover()
+	elif discovered:
+		_memory_remaining = maxf(_memory_remaining - delta, 0.0)
+		if _memory_remaining <= 0.0:
+			_hide_contact()
 
 
 func discover() -> void:
-	if discovered or state != State.ACTIVE:
+	if state != State.ACTIVE:
+		return
+	_memory_remaining = visibility_memory_duration
+	if discovered:
 		return
 	discovered = true
+	visible = true
 	_pulse_time = 1.0
 	discovered_now.emit(self)
 	queue_redraw()
 
 
-func pick_up() -> bool:
-	if state != State.ACTIVE or not discovered or oxygen_remaining <= 0.0:
+func pick_up(emergency: bool = false) -> bool:
+	if state != State.ACTIVE or oxygen_remaining <= 0.0:
 		return false
-	state = State.RESCUED
-	visible = false
+	state = State.ON_EMERGENCY_BOAT if emergency else State.ON_MAIN_BOAT
+	_hide_contact()
 	picked_up.emit(self)
 	return true
 
 
 func deliver() -> void:
-	if state != State.RESCUED:
+	if state != State.ON_MAIN_BOAT and state != State.ON_EMERGENCY_BOAT:
 		return
-	state = State.TRANSPORTED
-	visible = false
+	state = State.DELIVERED
 	transported.emit(self)
 
 
 func reset_survivor() -> void:
 	state = State.ACTIVE
 	oxygen_remaining = maxf(oxygen_duration, 0.01)
-	discovered = false
+	_hide_contact()
 	_pulse_time = 0.0
-	visible = true
-	queue_redraw()
+
+
+func _hide_contact() -> void:
+	discovered = false
+	visible = false
+	_memory_remaining = 0.0
 
 
 func _draw() -> void:
-	if state == State.RESCUED or state == State.TRANSPORTED:
-		return
-	if state == State.LOST:
-		if discovered:
-			draw_line(Vector2(-4, -4), Vector2(4, 4), Color("657681"), 1.5, true)
-			draw_line(Vector2(-4, 4), Vector2(4, -4), Color("657681"), 1.5, true)
-		return
-	if not discovered:
-		draw_circle(Vector2.ZERO, 3.5, Color("203d4d"))
-		draw_arc(Vector2.ZERO, 7, 0.0, TAU, 20, Color("284756"), 1.0, true)
-		return
-	var indicator_color := Color("86dfc1")
+	var indicator_color := Color("87dfa3")
 	if oxygen_remaining <= 30.0:
 		indicator_color = Color("fa877a")
 	elif oxygen_remaining <= 55.0:
-		indicator_color = Color("ffce7f")
+		indicator_color = Color("ffdc70")
 	if _pulse_time > 0.0:
 		draw_arc(Vector2.ZERO, 12.0 + (1.0 - _pulse_time) * 28.0, 0.0, TAU, 36, Color(indicator_color, _pulse_time * 0.7), 1.5, true)
 	draw_circle(Vector2.ZERO, 11.0, Color(0.03, 0.10, 0.16, 0.8))
