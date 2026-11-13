@@ -1,114 +1,91 @@
-# One Last Light — Graybox v0.1
+# One Last Light — Graybox v0.2
 
-A playable, editable 2D rescue and resource-management prototype for **Game Production and Management — WS 2026/27**.
-
-**Engine:** Godot 4.7.2 Standard · **Language:** GDScript · **Target:** Windows x86_64 · **Renderer:** Compatibility · **Base viewport:** 1152 × 648.
-
-All visuals use simple Godot drawing geometry. The source project needs no external assets, add-ons, online services, or runtime dependencies beyond Godot.
+A playable 2D rescue strategy level for Game Production and Management, WS 2026/27. Steer the main boat while aiming the central lighthouse with the mouse. The far side of the chart takes time to reach. Sending the emergency boat there can save a life while you collect closer survivors, at the cost of the three stars you could have earned for that delivery.
 
 ## Open and play
 
-1. Install **Godot 4.7.2 Standard**, available from the [official archive](https://godotengine.org/download/archive/4.7.2-stable/). The .NET edition is unnecessary.
-2. Extract `OneLastLight_Graybox_v0.1.zip`, preserving its folder structure.
-3. In Godot Project Manager, choose **Import**, then select `OneLastLight/project.godot`.
-4. Press **F5** to run the configured main scene. Alternatively, open `scenes/main.tscn` and press **F6**.
-5. Launch a rescue from the introduction screen. Oxygen timers start when the round begins.
+1. Open this checkout on `feature/graybox-v0.2`, or extract the editable source archive.
+2. In Godot **4.7.2 Standard**, import `project.godot` and press **F5**.
+3. Select **Launch Rescue**. Both boats start in the harbor on the right. Level 1 starts with 15 live survivors and 4:00 on the clock.
+
+The project uses GDScript, the Compatibility renderer and Godot's drawing primitives. The base viewport is 1152 × 648. All game content runs locally.
+
+![Level 1 with an emergency boat dispatched to a survivor in the lighthouse beam](screenshots/gameplay.png)
 
 ## Controls
 
 | Input | Action |
 | --- | --- |
-| WASD / arrow keys | Move the boat with smooth acceleration and deceleration |
-| E beside a discovered survivor | Pick up one survivor within the interaction ring |
-| E inside the harbor safe zone | Deliver every passenger aboard |
-| Esc | Pause / resume; oxygen and movement stop while paused |
-| Mouse | Use introduction, pause, results, and upgrade buttons |
+| WASD or arrow keys | Steer the main boat. Release the keys to decelerate. |
+| Mouse | Aim the lighthouse while steering. |
+| E within 48 px of a live survivor | Pick up the closest person. This works even before discovery. |
+| E in the harbor | Unload everyone aboard the main boat. |
+| Right-click a visible survivor | Dispatch the emergency boat if it is ready. |
+| Esc | Pause or resume the clock, oxygen, visibility memory, both boats and the emergency cooldown. |
+| Left-click | Use launch, resume, upgrade and replay buttons. |
 
-## Rescue loop
+## Running a rescue
 
-**Detect → Evaluate → Prioritize → Rescue → Return → Upgrade**
+The beam reveals a survivor's ID, position, oxygen bar and seconds remaining. Moving within 64 px of someone also reveals them. A contact stays visible for three seconds after leaving both detection areas. Lighting the same spot again restores the indicator. Green means more than 55 seconds of oxygen, yellow means 31–55 seconds on the display and red means 30 seconds or less.
 
-The central lighthouse automatically sweeps a visible yellow cone across the sea. Illumination discovers survivors and permanently marks their positions for the current round. Undiscovered survivors are only faintly visible. Each discovered contact shows its ID, remaining oxygen in seconds, and an oxygen bar; urgency changes its indicator color.
+Oxygen runs from launch for everyone in the water. A successful pickup immediately freezes that person's oxygen. The main boat starts with two seats. Use the green harbor circle to unload, free both seats and earn **3 stars per person**. Steering into a rock or the island blocks the hull and briefly highlights its outline.
 
-Ten survivors wait at different positions with individually configured oxygen durations. Their oxygen decreases even before discovery. Compare urgency and distance, navigate around the island and rocks, and press **E** within the boat's pickup radius. The initial boat holds **3 passengers**. Aboard survivors stop consuming oxygen, but contribute no rescue score until delivered.
+The orange emergency boat starts with one seat. Right-clicking a visible live contact reserves its destination and marks the target while visible. The boat can finish the trip after the contact fades. The player may still pick that person up first.
 
-Return to the green harbor zone on the right and press **E**. All passengers are delivered, capacity is freed, and each delivery earns **3 stars per survivor**. The HUD tracks passengers, delivered rescues, losses, active water contacts, stars, and contextual instructions. Messages report discoveries, pickups, a full boat, deliveries, oxygen losses, and the round result.
-
-A round ends only when nobody remains active in the water **and** the boat has no passengers. If the final water contact is picked up, return to harbor to complete that rescue. If all remaining water contacts lose oxygen while passengers are aboard, those passengers still need delivery.
-
-## Survivor states
-
-| Code state | Meaning |
+| Emergency status | Behavior |
 | --- | --- |
-| `ACTIVE` | In the water; oxygen counts down; may be undiscovered or discovered |
-| `RESCUED` | Picked up and aboard; oxygen stopped; not yet a successful delivery |
-| `TRANSPORTED` | Delivered to harbor; included in the rescued counter and awarded stars |
-| `LOST` | Oxygen reached zero in the water; cannot be picked up |
+| READY | Accepts one assignment. |
+| TRAVELING | Follows a hull-clear route around rocks and the island. |
+| RESCUING | Spends 0.65 seconds at the target. Oxygen continues until pickup succeeds. |
+| RETURNING | Brings its passenger to harbor. If the target died or boarded the main boat, returns empty. |
+| COOLDOWN | Waits 24 seconds after a successful delivery. An empty return becomes ready immediately. |
 
-## Upgrades and subsequent rounds
+Emergency deliveries add one successful rescue and **zero stars**. Losses award zero stars. Only harbor deliveries enter the rescued count. The HUD shows the remaining time, both manifests, each boat's deliveries, total delivered, losses, people still in the water and the session star bank.
 
-Spend banked stars in the results menu between rounds. Upgrades cannot be purchased during an active rescue.
+### Ending the level
 
-| Upgrade | Effect per level | Levels | Costs |
-| --- | --- | --- | --- |
-| Capacity | +1 passenger; 3 seats initially, 6 at maximum | 3 | 6, 9, 12 stars |
-| Speed | +18% of base speed; +54% at maximum | 3 | 6, 9, 12 stars |
+- **Victory** requires all 15 people accounted for, with 13–15 delivered, at most two lost, and time left. A passenger still aboard either boat keeps the rescue open.
+- **Game Over – Too Many Survivors Lost** appears on the third oxygen death.
+- **Game Over – Time Ran Out** appears when the countdown expires with the rescue unfinished.
 
-**Next Round** increases the round number and launches another rescue. **Retry** restarts the current round number. Both reset survivor states, discovery, oxygen, the boat's position, and round statistics while preserving banked currency and purchased upgrades. They reuse the same map and oxygen durations to support repeatable playtests. Currency and upgrades persist for the current application session only; there is no save file.
+The results screen reports deliveries, losses, people still in the water and passengers still aboard. Between attempts, spend accumulated stars on **Main Boat Speed**. Each rank adds 18% of base speed. The three prices are **18, 27 and 36 stars**. Six personal deliveries fund the first rank. **Replay Level 1** restores positions, oxygen, visibility, both boats, cooldown and the clock. Banked stars and upgrades carry across attempts in the current application session.
+
+## Design changes from v0.1
+
+| System | v0.1 | v0.2 |
+| --- | --- | --- |
+| Search | Automatic rotating beam and permanent markers | Mouse aim, temporary visual memory and local detection |
+| Survivors and boats | 10 contacts and a three-seat player boat | 15 different oxygen budgets, two player seats and a one-seat autonomous boat |
+| Pickup | Required discovery | An in-range living survivor can board in darkness |
+| Objective | Resolve the water contacts and unload | Four-minute deadline, immediate failure at three losses and a distinct victory |
+| Economy | Personal deliveries, capacity and speed shop | Personal deliveries earn stars, emergency deliveries count toward victory, Level 1 speed shop |
+| Progression | Increment the round number on the same map | Replay a single authored Level 1 with earned equipment |
+
+The original project remains available at `graybox-v0.1`.
 
 ## Project structure and tuning
 
-`scenes/main.tscn` is the complete editable level. The boat, survivor, lighthouse, harbor, and rock are reusable scenes in `scenes/`. Their matching scripts own entity behavior, `scripts/game_manager.gd` owns round state and the economy, and `scripts/main.gd` connects the level and interface.
+The editable level is `scenes/main.tscn`. It instances the existing boat, lighthouse, survivor, harbor and rock scenes alongside `scenes/emergency_boat.tscn`. `scripts/main.gd` connects input, HUD and screens. `game_manager.gd` coordinates the level, `level_clock.gd` tracks its deadline, and `rescue_economy.gd` handles the session bank and upgrade prices. The five survivor states are `ACTIVE`, `ON_MAIN_BOAT`, `ON_EMERGENCY_BOAT`, `DELIVERED` and `LOST`.
 
-`screenshots/` contains actual Godot captures of the briefing, gameplay, pause, debrief, and a purchased upgrade. `tests/` contains the repeatable runtime suite and its recorded output. `tools/package_project.py` rebuilds the source archive without engine caches.
-
-Gameplay parameters use exported variables and can be changed in the Inspector or script defaults:
-
-| Parameter | Default | Location |
+| Designer control | Default | Edit location |
 | --- | --- | --- |
-| Survivor positions / individual oxygen durations | Ten authored contacts with different timers | Survivor instances in `scenes/main.tscn`; `survivor.gd` exports `oxygen_duration`, `survivor_id` |
-| Boat base speed | 185 px/s | `scripts/player_boat.gd`: `base_speed` |
-| Acceleration / deceleration | 530 / 430 px/s² | `scripts/player_boat.gd` |
-| Pickup radius | 48 px | `scripts/player_boat.gd`: `pickup_radius` |
-| Starting capacity / speed bonus | 3 / 0.18 per level | `scripts/player_boat.gd` |
-| Stars per delivery | 3 per survivor | `scripts/game_manager.gd`: `stars_per_survivor` |
-| Upgrade base costs / cost step / maximum level | 6 / 3 / 3 | `scripts/game_manager.gd` |
-| Boat starting position | Near harbor | `scripts/game_manager.gd`: `boat_spawn` |
-| Lighthouse rotation / range / cone width | 0.50 rad/s / 660 px / 0.48 rad | `scripts/lighthouse.gd` |
-| Harbor safe radius | 62 px | `scripts/harbor.gd`: `safe_radius` |
-| Rocks, island, and survivor layout | Authored graybox level | `scenes/main.tscn` and reusable obstacle scenes |
+| Survivor position, ID and oxygen | 15 individual timers from 26 to 205 s | Survivor instances in `scenes/main.tscn` |
+| Level duration, loss threshold, selection radius | 240 s, 3 losses, 22 px | GameManager exports in `scripts/game_manager.gd` |
+| Main boat handling | 100 px/s, acceleration 300 and deceleration 240 px/s² | `scripts/player_boat.gd` |
+| Main seats, pickup and proximity | 2, 48 px, 64 px | `scripts/player_boat.gd` |
+| Lighthouse turning rate, range and full cone width | 6 rad/s, 660 px, 0.48 rad | `scripts/lighthouse.gd` |
+| Visibility memory | 3 s | `visibility_memory_duration` in `scripts/survivor.gd` |
+| Emergency seats, speed, pickup, service and cooldown | 1, 74 px/s, 22 px, 0.65 s, 24 s | `scripts/emergency_boat.gd` |
+| Harbor delivery radius | 62 px | `scripts/harbor.gd` |
+| Personal reward and speed prices | 3 stars, 18 initial price, 9 price increment, 3 ranks | GameManager's exported Economy resource |
+| Speed improvement | 18% of base per rank | `speed_bonus_per_level` in `scripts/player_boat.gd` |
 
-Physics layer 1 contains navigation obstacles; the boat occupies layer 2 and collides with layer 1. The harbor is a nonblocking interaction zone. Fog and storm markings are visual route-planning placeholders; they do not change boat handling or oxygen.
+The northwest survivor has an early deadline. Eastern contacts give the player short trips while the emergency boat crosses the chart. Later oxygen budgets allow repeated returns from the west. The fixed-step route checks and remaining playtest questions are documented in [TESTING.md](TESTING.md).
 
-## Windows build
+The emergency boat first checks a direct route. For blocked passages, `scripts/boat_routes.gd` builds an AStar2D graph around the level's static colliders and tests segments with the actual hull. Both boats collide with level obstacles and can pass each other. Fog and storm marks are visual placeholders. Rocks do not occlude the beam.
 
-The project includes a **Windows Desktop** export preset configured for **x86_64** with the PCK embedded in the executable.
+Only Level 1 is playable. The economy records the planned unlock order for main speed, main capacity, lighthouse range, emergency speed, emergency capacity and emergency cooldown at levels 1–6 respectively. Later levels and their shops are future work. There is no disk save.
 
-1. In Godot 4.7.2, use **Editor → Manage Export Templates** to install the matching **4.7.2 Standard export templates**.
-2. Open **Project → Export**, select **Windows Desktop**, and export the project to `builds/OneLastLight.exe` or another location.
-3. Copy the exported executable to a Windows x86_64 computer to play without the editor.
+## Windows and editable source
 
-The delivery ZIP is the editable source project. See `TESTING.md` for whether an executable export and Windows runtime were validated in the delivery environment.
-
-## Verification
-
-Actual validation results and environment limitations are recorded in **`TESTING.md`**. To repeat the automated checks from this project directory, replace `godot` below with the path to your Godot 4.7.2 executable if necessary:
-
-```sh
-godot --headless --path . --editor --quit
-godot --headless --path . --script res://tests/runtime_suite.gd
-```
-
-For a manual playtest, check movement and deceleration in all directions, collisions with rocks and the central island, beam discovery, oxygen countdown and loss, pickups up to capacity, rejection when full, and delivery with **E** at harbor. Confirm that pickups alone do not increase successful rescues or stars. Complete a round, buy both upgrade types, and verify their effect after retrying or proceeding. Pause during a countdown to confirm that oxygen freezes, then resume.
-
-## Known scope limits
-
-- This is one graybox test level, with provisional tuning and a reusable round rather than a six-level campaign.
-- Weather zones provide visual navigation context only. There is no advanced weather simulation or beam occlusion by rocks.
-- All graphics are simple drawn shapes; there are no external sprites, detailed boat animations, or audio assets.
-- No multiplayer, complex AI pathfinding, helicopter, Panic Meter, backend, payments, or save system is included.
-- Headless checks cannot establish visual readability, keyboard feel, or native Windows behavior; use the manual playtest alongside the recorded automated results.
-
-## Future Work
-
-Later iterations may add a **second emergency rescue boat that independently rescues a limited number of survivors**. It is intentionally not implemented in v0.1. Other possible work includes balancing oxygen and travel times through playtests, weather mechanics, accessibility settings, audio feedback, persistent progression, and additional authored levels.
+Play directly in Godot on Windows. To build a standalone executable, install the matching 4.7.2 Standard export templates and use the included **Windows Desktop** x86_64 preset. To create an editable source ZIP, run `python tools/package_project.py` from the checkout. The tool writes `OneLastLight_Graybox_v0.2.zip` and its SHA-256 file beside the checkout. See [TESTING.md](TESTING.md) for the actual verification environment and commands.

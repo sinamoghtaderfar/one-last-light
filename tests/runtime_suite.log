@@ -1,60 +1,112 @@
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 PASS: Main scene loads
-PASS: Main scene resolves all gameplay components
-PASS: Level contains ten survivors
+PASS: Main scene resolves both boats, manager, lighthouse and harbor
+PASS: Level contains fifteen survivors
 PASS: Project main scene is configured
 PASS: Compatibility renderer is configured
+PASS: Every survivor has a unique ID and position
+PASS: Every survivor has an individual oxygen budget
 PASS: Briefing freezes gameplay
 PASS: Oxygen waits for launch
-PASS: Survivors have different configurable oxygen budgets
-PASS: Launch activates the rescue round
-PASS: Boat begins with three empty seats
+PASS: Launch activates the round
+PASS: Main boat begins with two empty seats
+PASS: Emergency boat starts ready with one empty seat
+PASS: Emergency boat is slower than the main boat
+PASS: Both boats start at the safe harbor
+PASS: Level 1 has a four-minute deadline
 PASS: Upgrades cannot be bought during a round
-PASS: Pause freezes oxygen
-PASS: Pause freezes lighthouse
-PASS: Pause freezes boat movement
 PASS: Movement input moves the CharacterBody2D
 PASS: Acceleration ramps toward maximum speed
 PASS: Deceleration brings the boat to rest
 PASS: Rock collision blocks sustained boat movement
 PASS: Boat reports a real rock slide collision
 PASS: Lighthouse island has an actual blocking collider
-PASS: Lighthouse beam rotates
-PASS: Beam detects an in-cone survivor position
-PASS: Beam rejects positions outside its cone
+PASS: Lighthouse smoothly turns toward the actual mouse position
+PASS: A stationary cursor holds the beam without an automatic sweep
+PASS: Beam detects an in-cone survivor
+PASS: Beam rejects off-cone positions
 PASS: Beam range is finite
-PASS: Manager discovers a survivor illuminated by the lighthouse
-PASS: Discovery marker persists after the beam passes
-PASS: Oxygen decreases while a survivor remains in water
-PASS: Undiscovered survivors cannot be boarded
-PASS: E boards survivor 1
-PASS: E boards survivor 2
-PASS: E boards survivor 3
-PASS: Oxygen stops after boarding
-PASS: Boarding alone gives no successful rescue credit or currency
-PASS: Capacity prevents a fourth passenger from boarding
-PASS: Full boat gets a contextual return instruction
-PASS: Harbor recognizes its safe zone
-PASS: Harbor E interaction delivers all three passengers and frees capacity
-PASS: Only delivered passengers award stars
-PASS: Delivery sets transported state
-PASS: Empty unload cannot duplicate rescue rewards
-PASS: Oxygen exhaustion signals loss and updates accounting
-PASS: Lost survivors cannot be picked up
-PASS: Round continues while active water contacts remain
-PASS: Resolved round ends and freezes controls
-PASS: End results account for all ten people
-PASS: Earned stars purchase a capacity upgrade between rounds
-PASS: Capacity purchase deducts the configured cost and adds a real seat
-PASS: Insufficient stars prevent a purchase
-PASS: Next round preserves upgrades and increments round index
-PASS: Next round resets survivor states and result counters
-PASS: Upgraded fourth seat works in the next round
-PASS: Round remains active when the final survivors are aboard awaiting delivery
-PASS: Delivering the final passengers ends the round
-PASS: Second-round rewards buy a speed upgrade
-PASS: Speed upgrade charges stars and increases actual movement multiplier
-PASS: Restart resets the round while keeping earned currency
-PASS: Restart retains upgrades and restores all survivors
-RUNTIME SUITE: 57/57 checks passed
+PASS: Illumination reveals the survivor and oxygen display
+PASS: Survivor stays visible for the first 2.95 seconds out of the beam
+PASS: Survivor hides after three seconds
+PASS: Re-illumination immediately reveals the survivor
+PASS: Oxygen decreases in the water
+PASS: Contact begins unseen even at the pickup location
+PASS: E boards a nearby survivor before any lighthouse or proximity detection tick
+PASS: Oxygen stops on the main boat
+PASS: Proximity makes an unlit contact visible
+PASS: E fills the second seat
+PASS: Pickup alone gives no successful rescue or currency
+PASS: Capacity prevents a third passenger
+PASS: Full boat gets a return instruction
+PASS: Harbor E unloads both seats and credits both main-boat rescues
+PASS: Unloaded survivors are delivered
+PASS: Each main-boat delivery earns three stars
+PASS: Empty unload cannot duplicate rewards
+PASS: Emergency route fixture crosses the island on a straight bearing
+PASS: An unseen target cannot be assigned
+PASS: Right-click dispatches the ready boat to a visible survivor
+PASS: Duplicate dispatch is rejected
+PASS: Emergency boat advances under its own power
+PASS: Escape pauses the gameplay tree
+PASS: Pause freezes oxygen and level time
+PASS: Pause freezes the lighthouse and player boat
+PASS: Pause freezes the dispatched boat
+PASS: Escape resumes both clocks and the emergency mission
+PASS: The assignment survives the target fading from view
+PASS: Emergency hull clears every rock and the lighthouse island along both legs
+PASS: Emergency boat reaches the target, rescues and carries it home
+PASS: Emergency passenger oxygen freezes for the return trip
+PASS: Emergency boat unloads automatically in the harbor
+PASS: Emergency delivery increases rescued totals without recording a death
+PASS: Emergency delivery preserves the existing star bank exactly
+PASS: HUD ABOARD shows 0/2
+PASS: HUD MAIN shows 2
+PASS: HUD EMERGENCY shows 1
+PASS: HUD DELIVERED shows 3
+PASS: HUD LOST shows 0/3
+PASS: HUD IN THE WATER shows 12
+PASS: HUD STAR BANK shows 6
+PASS: HUD TIME shows 3:32
+PASS: HUD identifies Level 1
+PASS: Emergency HUD shows cooldown status and its passenger capacity
+PASS: Dock cooldown blocks the next assignment
+PASS: Pause freezes emergency cooldown
+PASS: Emergency boat becomes ready when cooldown expires
+PASS: New task starts from ready
+PASS: The player can rescue a contact while the emergency boat is en route
+PASS: Emergency boat returns safely after its target boards the player boat
+PASS: A withdrawn target has no emergency delivery or loss
+PASS: Emergency boat returns safely if its assigned survivor dies
+PASS: Oxygen exhaustion signals one loss
+PASS: Lost survivors reject pickup and dispatch
+PASS: Level continues at two deaths
+PASS: The third death immediately triggers the loss threshold
+PASS: Loss screen explains the death threshold
+PASS: Game over disables steering and lighthouse control
+PASS: Results freeze the unresolved contacts and the level clock
+PASS: A shop purchase requires sufficient stars
+PASS: Countdown expiry is a distinct failure even with a living passenger aboard
+PASS: Timeout screen explains the deadline
+PASS: Timeout freezes a dispatched emergency boat
+PASS: Retry restores the Level 1 clock and clears the result
+PASS: Retry clears round statistics and keeps the earned bank
+PASS: Retry resets all fifteen oxygen tanks, states and markers
+PASS: Retry clears manifests, dispatch, cooldown and emergency position
+PASS: Twelve main deliveries and two losses leave the last rescue in play
+PASS: Victory waits for the last passenger on the emergency boat
+PASS: Final harbor delivery wins with thirteen delivered and two lost
+PASS: Victory includes both fleets before the deadline
+PASS: Victory screen identifies the successful outcome
+PASS: Earned stars unlock the results-screen speed purchase
+PASS: The speed purchase applies and gives feedback in the shop
+PASS: A purchase charges exactly the price and raises the next price
+PASS: Level 1 replay retains the purchased upgrade and unspent stars
+PASS: Upgrade raises measured top speed under normal movement input
+PASS: Victory waits for the last passenger on the main boat
+PASS: All fifteen delivered is also a victory
+PASS: The second speed level charges its higher price
+PASS: The third speed level has a higher price
+PASS: Maximum speed level blocks another purchase even with sufficient funds
+RUNTIME SUITE: 109/109 checks passed

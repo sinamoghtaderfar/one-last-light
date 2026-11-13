@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/game_manager.gd" id="2_manager"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/lighthouse.tscn" id="5_light"]
 [ext_resource type="PackedScene" path="res://scenes/harbor.tscn" id="6_harbor"]
 [ext_resource type="PackedScene" path="res://scenes/rock.tscn" id="7_rock"]
+[ext_resource type="PackedScene" path="res://scenes/emergency_boat.tscn" id="8_emergency"]
 
 [sub_resource type="RectangleShape2D" id="Shape_horizontal"]
 size = Vector2(1116, 12)
@@ -42,7 +43,7 @@ position = Vector2(1128, 342)
 shape = SubResource("Shape_vertical")
 
 [node name="Lighthouse" parent="World" instance=ExtResource("5_light")]
-position = Vector2(540, 332)
+position = Vector2(576, 342)
 
 [node name="Harbor" parent="World" instance=ExtResource("6_harbor")]
 position = Vector2(1038, 342)
@@ -86,55 +87,83 @@ radius = 22.0
 [node name="Survivor01" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(884, 420)
 survivor_id = 1
-oxygen_duration = 72.0
+oxygen_duration = 34.0
 
 [node name="Survivor02" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(846, 218)
 survivor_id = 2
-oxygen_duration = 96.0
+oxygen_duration = 47.0
 
 [node name="Survivor03" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(701, 492)
 survivor_id = 3
-oxygen_duration = 88.0
+oxygen_duration = 78.0
 
 [node name="Survivor04" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(677, 156)
 survivor_id = 4
-oxygen_duration = 112.0
+oxygen_duration = 60.0
 
 [node name="Survivor05" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(405, 190)
 survivor_id = 5
-oxygen_duration = 100.0
+oxygen_duration = 130.0
 
 [node name="Survivor06" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(156, 166)
 survivor_id = 6
-oxygen_duration = 132.0
+oxygen_duration = 26.0
 
 [node name="Survivor07" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(98, 360)
 survivor_id = 7
-oxygen_duration = 150.0
+oxygen_duration = 154.0
 
 [node name="Survivor08" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(267, 498)
 survivor_id = 8
-oxygen_duration = 124.0
+oxygen_duration = 185.0
 
 [node name="Survivor09" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(418, 470)
 survivor_id = 9
-oxygen_duration = 85.0
+oxygen_duration = 101.0
 
 [node name="Survivor10" parent="World/Survivors" instance=ExtResource("4_survivor")]
 position = Vector2(780, 351)
 survivor_id = 10
-oxygen_duration = 65.0
+oxygen_duration = 39.0
+
+[node name="Survivor11" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(168, 321)
+survivor_id = 11
+oxygen_duration = 159.0
+
+[node name="Survivor12" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(323, 154)
+survivor_id = 12
+oxygen_duration = 137.0
+
+[node name="Survivor13" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(505, 522)
+survivor_id = 13
+oxygen_duration = 109.0
+
+[node name="Survivor14" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(824, 506)
+survivor_id = 14
+oxygen_duration = 84.0
+
+[node name="Survivor15" parent="World/Survivors" instance=ExtResource("4_survivor")]
+position = Vector2(151, 496)
+survivor_id = 15
+oxygen_duration = 205.0
 
 [node name="PlayerBoat" parent="World" instance=ExtResource("3_boat")]
 position = Vector2(1020, 342)
+
+[node name="EmergencyBoat" parent="World" instance=ExtResource("8_emergency")]
+position = Vector2(1042, 380)
 
 [node name="GameManager" type="Node" parent="."]
 process_mode = 1

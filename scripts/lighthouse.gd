@@ -1,8 +1,8 @@
 class_name Lighthouse
 extends Node2D
-## The rotating cone is also the source of truth for survivor discovery.
+## The drawn cone and contact detection use the same mouse-controlled bearing.
 
-@export var rotation_speed: float = 0.50
+@export var rotation_speed: float = 6.0 # radians per second
 @export var beam_length: float = 660.0
 @export var beam_width: float = 0.48
 
@@ -12,13 +12,19 @@ var enabled: bool = true
 
 func _process(delta: float) -> void:
 	if enabled:
-		beam_angle = wrapf(beam_angle + rotation_speed * delta, -PI, PI)
+		aim_at(get_global_mouse_position(), delta)
+
+
+func aim_at(point: Vector2, delta: float) -> void:
+	var direction := point - global_position
+	if not direction.is_zero_approx():
+		beam_angle = rotate_toward(beam_angle, direction.angle(), rotation_speed * delta)
 		queue_redraw()
 
 
 func is_illuminated(world_position: Vector2) -> bool:
 	var offset: Vector2 = world_position - global_position
-	if offset.length() > beam_length:
+	if not enabled or offset.length() > beam_length:
 		return false
 	return absf(wrapf(offset.angle() - beam_angle, -PI, PI)) <= beam_width * 0.5
 
