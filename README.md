@@ -6,7 +6,7 @@ A playable 2D rescue strategy level for Game Production and Management, WS 2026/
 
 1. Open this checkout on `feature/graybox-v0.2`, or extract the editable source archive.
 2. In Godot **4.7.2 Standard**, import `project.godot` and press **F5**.
-3. Select **Launch Rescue**. Both boats start in the harbor on the right. Level 1 starts with 15 live survivors and 4:00 on the clock.
+3. Read the four-step tutorial, moving with **Next** and **Back**, then select **Launch Rescue** on the last page. Nothing moves and the clock stays at 4:00 until you do. Both boats start in the harbor on the right. Level 1 starts with 15 live survivors and 4:00 on the clock.
 
 The project uses GDScript, the Compatibility renderer and Godot's drawing primitives. The base viewport is 1152 × 648. All game content runs locally.
 

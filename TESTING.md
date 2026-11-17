@@ -10,6 +10,7 @@ From the project directory, replace `godot` with your Godot 4.7.2 console execut
 godot --headless --path . --editor --import
 godot --headless --path . --quit-after 30
 godot --headless --path . --fixed-fps 60 --script res://tests/runtime_suite.gd
+godot --headless --path . --fixed-fps 60 --script res://tests/tutorial_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/balance_route.gd
 ```
 
@@ -54,3 +55,22 @@ The game also ran under the Windows Compatibility renderer on an NVIDIA GeForce 
 4. Inspect oxygen numbers and red/yellow/green bars at the target display scale. Try simultaneous mouse aim, WASD and E on a physical keyboard. Replay after buying speed and check whether the handling change is perceptible.
 
 The reference pilot's foreknowledge leaves human search time, steering difficulty and perceived fairness unmeasured. Balancing should use observed player routes before changing the four-minute deadline. Native Windows editor/runtime testing is complete at the base viewport. Standalone executable export and additional display sizes remain unverified. Only Level 1 and the main speed shop are playable.
+
+## Tutorial (`feature/step-by-step-tutorial`)
+
+The single briefing page was replaced by a four-step tutorial (Your Mission, Find Survivors, Rescue & Deliver, Emergency Rescue) with Next and Back, a "Step n of 4" counter, four progress segments and Launch Rescue on the last page only. `tests/tutorial_suite.gd` checks each page's text, navigation limits, progress state, button set, layout fit at 1152 × 648, a frozen 4:00 timer and full oxygen tanks while it is open, stray E, Esc, right-click and movement input, a launch that happens exactly once, and pause, results, upgrade and replay after launching from the tutorial. Replay does not reopen it.
+
+Verified on Linux with the official Godot 4.7.2 build, not on the Windows machine used for the v0.2 numbers above:
+
+| Run | Result |
+| --- | --- |
+| `runtime_suite.gd`, unchanged | 109/109 |
+| `tutorial_suite.gd`, `--headless` (button signals stand in for mouse clicks) | 172/172 |
+| `tutorial_suite.gd`, windowed under Xvfb (real mouse click events) | 172/172 |
+| `balance_route.gd` | Identical to the table above |
+| Web export (single-threaded) in headless Chromium with software WebGL | Clicked through all four pages, Back and Next, stray keys, then Launch Rescue. The clock ran and survivors were revealed. |
+
+The bundled UI font has no arrow glyphs and Web builds have no system fonts, so `←` and `→` render as missing-glyph boxes there. The tutorial draws its arrows from an inline SVG and a test asserts every tutorial character exists in the bundled font. The existing speed-shop button still contains `→` and was not changed.
+
+Not verified: a Windows desktop run, Firefox or Safari, a GPU renderer, and display sizes other than 1152 × 648. `screenshots/briefing.png` still shows the old single-page briefing.
+

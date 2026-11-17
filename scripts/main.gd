@@ -8,6 +8,49 @@ const TEXT := Color("e4ece8")
 const MUTED := Color("91abb7")
 const TEAL := Color("7fe0cc")
 const GOLD := Color("ffda92")
+const TUTORIAL_BODY_HEIGHT := 196.0
+const TUTORIAL_BUTTON_WIDTH := 170.0
+const ARROW_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M2 8h11M9 3.5 13.5 8 9 12.5" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+## Pre-launch tutorial content. Each step is one page; "icon" selects a TutorialIcon drawing.
+const TUTORIAL_STEPS := [
+	{
+		"title": "Your Mission",
+		"icon": 0,
+		"lines": [
+			"Rescue the 15 survivors before the 4-minute timer runs out.",
+			"You can lose up to 2 survivors. A third loss ends the mission.",
+		],
+	},
+	{
+		"title": "Find Survivors",
+		"icon": 1,
+		"lines": [
+			"Move your mouse to aim the lighthouse beam.",
+			"The light reveals survivors and their remaining oxygen.",
+			"Contacts disappear 3 seconds after leaving the light, unless your boat is close enough to detect them.",
+		],
+	},
+	{
+		"title": "Rescue & Deliver",
+		"icon": 2,
+		"lines": [
+			"Use WASD or the arrow keys to steer your rescue boat.",
+			"Press E near a survivor to pick them up, even if they are not currently visible.",
+			"Your boat carries 2 survivors. Return to the harbor and press E to deliver them.",
+			"Each survivor delivered by your main boat earns 3 stars.",
+		],
+	},
+	{
+		"title": "Emergency Rescue",
+		"icon": 3,
+		"lines": [
+			"Right-click a visible survivor to dispatch the emergency boat.",
+			"It automatically navigates around obstacles, rescues the survivor, and returns to harbor.",
+			"Emergency rescues earn 0 stars and do not deduct existing stars.",
+			"Press Esc to pause or resume the game.",
+		],
+	},
+]
 
 @onready var manager: RescueGameManager = $GameManager
 @onready var boat: RescueBoat = $World/PlayerBoat
@@ -30,6 +73,9 @@ var _bank_label: Label
 var _notice_time: float = 0.0
 var _notice_priority: int = 0
 var _paused: bool = false
+var _tutorial_open: bool = false
+var _tutorial_step: int = 0
+var _arrow_textures: Dictionary = {}
 
 
 func _ready() -> void:
@@ -42,7 +88,7 @@ func _ready() -> void:
 	manager.round_started.connect(_on_round_started)
 	manager.round_ended.connect(_show_results)
 	manager.configure(boat, lighthouse, harbor, survivors, emergency)
-	_show_intro()
+	_show_tutorial()
 	queue_redraw()
 
 
@@ -181,25 +227,123 @@ func _on_round_started() -> void:
 	_notice_time = 0.0
 	_notice_priority = 0
 	_paused = false
+	_tutorial_open = false
 	get_tree().paused = false
 	_clear_menu()
 
 
-func _show_intro() -> void:
+## The tutorial is pure UI. Until Launch Rescue, the manager keeps the clock, oxygen,
+## both boats and the lighthouse stopped, and every gameplay input checks round_active.
+func _show_tutorial() -> void:
+	_tutorial_open = true
+	_tutorial_step = 0
+	_render_tutorial_step()
+
+
+func _render_tutorial_step() -> void:
+	var step: Dictionary = TUTORIAL_STEPS[_tutorial_step]
 	_open_menu()
-	_add_menu_label("LEVEL 1    /    ROCKY WATERS", 13, TEAL)
-	_add_menu_label("One Last Light", 36, TEXT)
-	_add_menu_label("Find all 15 survivors. Deliver every living passenger within four minutes.\nYou can lose up to two people. A third loss ends the rescue.", 18, TEXT)
+	var counter := _add_menu_label("Step %d of %d" % [_tutorial_step + 1, TUTORIAL_STEPS.size()], 14, TEAL)
+	counter.name = "TutorialStepLabel"
+	var icon := TutorialIcon.new(step["icon"])
+	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_menu_box.add_child(icon)
+	var title := _add_menu_label(step["title"], 32, TEXT)
+	title.name = "TutorialTitle"
+	_menu_box.add_child(_tutorial_progress(_tutorial_step))
+	_menu_box.add_child(_tutorial_body(step["lines"]))
 	_menu_box.add_child(HSeparator.new())
-	_add_menu_label("Aim the lighthouse with your mouse to read oxygen times.\nContacts fade after three seconds. Press E within pickup range, even in darkness.", 15, MUTED)
-	_add_menu_label("Steer with WASD or arrows. Press E near a survivor to pick them up.\nYour boat seats two. Press E at the harbor to earn %d stars per person." % manager.stars_per_survivor, 15, TEXT)
-	_add_menu_label("Right-click a visible survivor to dispatch the one-seat emergency boat.\nIt returns on its own and saves a life for zero stars.", 15, TEXT)
-	var launch := _button("LAUNCH RESCUE", _launch_first_round)
-	_menu_box.add_child(launch)
-	launch.grab_focus()
+	_menu_box.add_child(_tutorial_navigation(_tutorial_step))
+
+
+func _tutorial_progress(current: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "TutorialProgress"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	for index in range(TUTORIAL_STEPS.size()):
+		var state := "upcoming"
+		var color := Color("2d4655")
+		if index < current:
+			state = "done"
+			color = TEAL.darkened(0.3)
+		elif index == current:
+			state = "current"
+			color = GOLD
+		var segment := Panel.new()
+		segment.name = "Segment%d" % (index + 1)
+		segment.custom_minimum_size = Vector2(56, 6)
+		segment.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		segment.set_meta("state", state)
+		segment.add_theme_stylebox_override("panel", _style(color, color, 3))
+		row.add_child(segment)
+	return row
+
+
+## A fixed-height block keeps the navigation buttons in the same place on every step.
+func _tutorial_body(lines: Array) -> VBoxContainer:
+	var body := VBoxContainer.new()
+	body.name = "TutorialBody"
+	body.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.custom_minimum_size.y = TUTORIAL_BODY_HEIGHT
+	body.add_theme_constant_override("separation", 12)
+	for line in lines:
+		var label := _label(line, 17, TEXT)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		body.add_child(label)
+	return body
+
+
+## Back sits left (absent on step 1); Next or Launch Rescue always sits right.
+func _tutorial_navigation(step: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "TutorialNav"
+	row.custom_minimum_size.y = 50 # Launch Rescue is taller; this stops the modal shifting on step 4.
+	row.add_theme_constant_override("separation", 12)
+	if step > 0:
+		var back := _button("Back", _tutorial_back)
+		back.name = "TutorialBack"
+		back.custom_minimum_size.x = TUTORIAL_BUTTON_WIDTH
+		_add_button_arrow(back, false)
+		row.add_child(back)
+	var spacer := Control.new()
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
+	var is_last := step == TUTORIAL_STEPS.size() - 1
+	var forward := _button("Launch Rescue" if is_last else "Next", _launch_first_round if is_last else _tutorial_next)
+	forward.name = "TutorialLaunch" if is_last else "TutorialNext"
+	forward.custom_minimum_size.x = TUTORIAL_BUTTON_WIDTH
+	if is_last:
+		_emphasize_button(forward)
+	else:
+		_add_button_arrow(forward, true)
+	row.add_child(forward)
+	forward.grab_focus.call_deferred()
+	return row
+
+
+func _tutorial_next() -> void:
+	_go_to_tutorial_step(_tutorial_step + 1)
+
+
+func _tutorial_back() -> void:
+	_go_to_tutorial_step(_tutorial_step - 1)
+
+
+func _go_to_tutorial_step(step: int) -> void:
+	if not _tutorial_open:
+		return
+	_tutorial_step = clampi(step, 0, TUTORIAL_STEPS.size() - 1)
+	_render_tutorial_step()
 
 
 func _launch_first_round() -> void:
+	# Only the open tutorial may launch, so a repeated press cannot start a second round.
+	if not _tutorial_open or manager.round_active:
+		return
+	_tutorial_open = false
 	manager.start_round()
 
 
@@ -335,6 +479,37 @@ func _button(content: String, callback: Callable) -> Button:
 	return button
 
 
+## The bundled UI font has no arrow glyphs and Web builds have no system fonts to fall
+## back on, so "←" and "→" would render as missing-glyph boxes there. Draw them instead.
+func _add_button_arrow(button: Button, points_right: bool) -> void:
+	if not _arrow_textures.has(points_right):
+		var image := Image.new()
+		if image.load_svg_from_string(ARROW_SVG, 1.5) != OK:
+			return # No arrow is better than a broken one; the button text still works.
+		if not points_right:
+			image.flip_x()
+		_arrow_textures[points_right] = ImageTexture.create_from_image(image)
+	button.icon = _arrow_textures[points_right]
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT if points_right else HORIZONTAL_ALIGNMENT_LEFT
+	for state in ["normal", "hover", "pressed", "hover_pressed", "focus"]:
+		button.add_theme_color_override("icon_%s_color" % state, TEXT)
+
+
+## Gold-ringed call to action; used only for Launch Rescue.
+func _emphasize_button(button: Button) -> void:
+	button.custom_minimum_size.y = 50
+	button.add_theme_font_size_override("font_size", 17)
+	button.add_theme_color_override("font_color", Color.WHITE)
+	for state in ["normal", "hover", "pressed"]:
+		var fill := Color("2c6a63") if state == "normal" else (Color("39877d") if state == "hover" else Color("21514c"))
+		var style := _style(fill, GOLD, 6)
+		style.set_border_width_all(2)
+		button.add_theme_stylebox_override(state, style)
+	var focus := _style(Color(0, 0, 0, 0), Color.WHITE, 6)
+	focus.set_border_width_all(2)
+	button.add_theme_stylebox_override("focus", focus)
+
+
 func _panel_at(rect: Rect2, color: Color) -> Panel:
 	var panel := Panel.new()
 	panel.position = rect.position
@@ -351,3 +526,39 @@ func _style(background: Color, border: Color, radius: int) -> StyleBoxFlat:
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(radius)
 	return style
+
+
+## Small tutorial pictograms drawn from primitives, so no image assets are needed.
+class TutorialIcon extends Control:
+	const GOLD_TONE := Color("ffda92")
+	const TEAL_TONE := Color("7fe0cc")
+	const HULL_TONE := Color("e4ece8")
+	var kind: int = 0
+
+	func _init(icon_kind: int) -> void:
+		kind = icon_kind
+		custom_minimum_size = Vector2(56, 56)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var c := Vector2(28, 28)
+		match kind:
+			0: # Lifebuoy: the mission is to bring everyone back.
+				for quarter in range(4):
+					var start := quarter * PI * 0.5 + 0.2
+					draw_arc(c, 19.0, start, start + PI * 0.5 - 0.4, 12, GOLD_TONE if quarter % 2 == 0 else TEAL_TONE, 7.0, true)
+				draw_arc(c, 11.0, 0.0, TAU, 32, Color("2d4655"), 1.5, true)
+			1: # Lighthouse beam sweeping across a survivor marker.
+				draw_colored_polygon(PackedVector2Array([Vector2(12, 28), Vector2(52, 10), Vector2(52, 46)]), Color(GOLD_TONE, 0.28))
+				draw_colored_polygon(PackedVector2Array([Vector2(5, 46), Vector2(19, 46), Vector2(16, 14), Vector2(8, 14)]), HULL_TONE)
+				draw_rect(Rect2(5, 6, 14, 8), GOLD_TONE)
+				draw_arc(Vector2(42, 28), 4.0, 0.0, TAU, 16, TEAL_TONE, 2.5, true)
+			2: # Main boat with its harbor ring.
+				draw_arc(c, 24.0, 0.0, TAU, 40, Color(TEAL_TONE, 0.45), 1.5, true)
+				draw_colored_polygon(PackedVector2Array([Vector2(10, 28), Vector2(46, 28), Vector2(39, 39), Vector2(17, 39)]), HULL_TONE)
+				draw_rect(Rect2(21, 19, 13, 9), TEAL_TONE)
+				draw_line(Vector2(28, 11), Vector2(28, 19), GOLD_TONE, 2.0, true)
+			3: # Emergency call: pulse rings around a dispatch point.
+				draw_circle(c, 5.0, GOLD_TONE)
+				draw_arc(c, 13.0, 0.0, TAU, 28, Color(GOLD_TONE, 0.7), 2.0, true)
+				draw_arc(c, 21.0, 0.0, TAU, 36, Color(GOLD_TONE, 0.35), 2.0, true)
