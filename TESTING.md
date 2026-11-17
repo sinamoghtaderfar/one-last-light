@@ -11,6 +11,7 @@ godot --headless --path . --editor --import
 godot --headless --path . --quit-after 30
 godot --headless --path . --fixed-fps 60 --script res://tests/runtime_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/tutorial_suite.gd
+godot --headless --path . --fixed-fps 60 --script res://tests/intro_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/balance_route.gd
 ```
 
@@ -74,3 +75,25 @@ The bundled UI font has no arrow glyphs and Web builds have no system fonts, so 
 
 Not verified: a Windows desktop run, Firefox or Safari, a GPU renderer, and display sizes other than 1152 × 648. `screenshots/briefing.png` still shows the old single-page briefing.
 
+## Level-start countdown (`feature/level-start-countdown`)
+
+Launch Rescue and Replay Level 1 now prepare the round, play a 3-second 3 → 2 → 1 countdown with a brief GO!, and only then activate gameplay. `GameManager` was split into `prepare_round()` (reset everything, boats at their berths, beam on the harbor, every gameplay system stopped) and `begin_round()` (switch boat controls, lighthouse aiming, emergency dispatch, the clock and oxygen on together); `start_round()` and `restart_round()` still do both, so the earlier suites are unchanged. The white boat follows a cubic Bézier path from above the top edge of the chart into its berth, driven by one delta-accumulated clock, so number, boat and overlay stay in step at any frame rate. The tutorial code was not touched.
+
+`tests/intro_suite.gd` (132 checks) covers: 3, 2, 1 order and roughly one second each; a large centred number with no backdrop; boat above the visible sea at t = 0, entering within the first second, moving only downward with no jumps or sharp bends, facing its direction of travel while moving, a seamless hand-off and an exact landing on the spawn; at least 20 px of water between the hull and every rock, the lighthouse island and the dock along the whole path; the beam on the harbor bearing for the entire countdown even with the mouse elsewhere, and normal mouse aiming afterwards; a 4:00 timer, full oxygen tanks, locked boats and lighthouse, an idle emergency boat and no round events until the end; E, Esc, right-click and held steering keys ignored during the live engine loop; activation of controls, aiming, dispatch, clock and oxygen together exactly at 3 s with normal speed, handling and collision values; identical timing at 30, 60 and 144 fps, uneven frame times and a single 5 s hitch; three consecutive replays that repeat the countdown, skip the tutorial, reset the beam and keep the star bank and upgrade; tutorial navigation unchanged. `tutorial_suite.gd` gained four checks because its launch and replay sections now wait for the countdown (176 checks).
+
+Verified on Linux with the official Godot 4.7.2 build:
+
+| Run | Result |
+| --- | --- |
+| `runtime_suite.gd`, unchanged | 109/109 |
+| `tutorial_suite.gd`, `--headless` | 176/176 |
+| `tutorial_suite.gd`, windowed under Xvfb (real mouse click events) | 176/176 |
+| `intro_suite.gd`, `--headless --fixed-fps 60` | 132/132 |
+| `intro_suite.gd`, `--headless` without `--fixed-fps` (two runs) | 132/132 each |
+| `intro_suite.gd`, windowed under Xvfb | 132/132 |
+| `balance_route.gd` | Output identical to the baseline commit |
+| Web export in headless Chromium with software WebGL | Clicked through the tutorial, Launch Rescue played the countdown over the scene, the boat reached its berth and the clock then ran (3:59 shortly after activation) |
+
+Mutation checks: the suite fails when the beam is not pointed at the harbor, when gameplay is not stopped during preparation, when the boat starts inside the visible area, when the path crosses a rock or the island or ends off the berth, when the countdown length or speed changes, when Replay skips the countdown or reopens the tutorial, when aiming is left enabled, and when the upgrade or star bank is reset.
+
+Not verified: a Windows desktop run, Firefox or Safari, a GPU renderer, and display sizes other than 1152 × 648.

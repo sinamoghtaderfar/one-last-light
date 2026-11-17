@@ -51,6 +51,11 @@ const TUTORIAL_STEPS := [
 		],
 	},
 ]
+## Level-start intro: a three-second countdown while the main boat sails in from above the chart.
+const INTRO_DURATION := 3.0
+const GO_DURATION := 0.7
+const COUNTDOWN_CENTER := Vector2(576, 226)
+const ARRIVAL_START_Y := SEA_RECT.position.y - 76.0
 
 @onready var manager: RescueGameManager = $GameManager
 @onready var boat: RescueBoat = $World/PlayerBoat
@@ -76,6 +81,12 @@ var _paused: bool = false
 var _tutorial_open: bool = false
 var _tutorial_step: int = 0
 var _arrow_textures: Dictionary = {}
+var _countdown: Control
+var _countdown_number: Label
+var _countdown_caption: Label
+var _intro_active: bool = false
+var _intro_elapsed: float = 0.0
+var _go_remaining: float = 0.0
 
 
 func _ready() -> void:
@@ -83,6 +94,7 @@ func _ready() -> void:
 		if node is Survivor:
 			survivors.append(node)
 	_build_hud()
+	_build_countdown()
 	manager.notification.connect(_on_notification)
 	manager.state_changed.connect(_refresh_hud)
 	manager.round_started.connect(_on_round_started)
@@ -93,6 +105,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_advance_intro(delta)
 	_refresh_hud()
 	harbor.set_boat_present(harbor.contains_point(boat.global_position))
 	if not _paused and manager.round_active:
@@ -344,7 +357,7 @@ func _launch_first_round() -> void:
 	if not _tutorial_open or manager.round_active:
 		return
 	_tutorial_open = false
-	manager.start_round()
+	_begin_level_intro()
 
 
 func _show_results() -> void:
@@ -390,7 +403,7 @@ func _buy_speed() -> void:
 
 
 func _retry_round() -> void:
-	manager.restart_round()
+	_begin_level_intro()
 
 
 func _toggle_pause() -> void:
@@ -407,6 +420,134 @@ func _toggle_pause() -> void:
 		resume.grab_focus()
 	else:
 		_clear_menu()
+
+
+## --- Level start intro --------------------------------------------------------------------
+## Runs from Launch Rescue (and every Replay) until the last countdown tick. The manager has
+## prepared the round but keeps it stopped, so the clock, oxygen, both boats and the lighthouse
+## stay inactive. One elapsed-time value drives the number, the boat and the overlay, so the
+## sequence takes three seconds at any frame rate. Gameplay is switched on exactly once, in
+## _finish_intro, after the boat has reached its berth.
+func _begin_level_intro() -> void:
+	if _intro_active:
+		return
+	_clear_menu()
+	manager.prepare_round()
+	_intro_elapsed = 0.0
+	_go_remaining = 0.0
+	_intro_active = true
+	_apply_arrival(0.0)
+	_update_countdown_display()
+
+
+func _advance_intro(delta: float) -> void:
+	if _intro_active:
+		_intro_elapsed = minf(_intro_elapsed + delta, INTRO_DURATION)
+		if _intro_elapsed < INTRO_DURATION:
+			_apply_arrival(delta)
+			_update_countdown_display()
+		else:
+			_finish_intro()
+	elif _go_remaining > 0.0:
+		_go_remaining = maxf(_go_remaining - delta, 0.0)
+		_update_go_display()
+
+
+func _finish_intro() -> void:
+	_intro_active = false
+	# Land exactly on the berth with the normal start heading, so activation causes no jump.
+	boat.global_position = manager.boat_spawn
+	boat.heading = PI
+	boat.velocity = Vector2.ZERO
+	boat.queue_redraw()
+	manager.begin_round()
+	_go_remaining = GO_DURATION
+	_update_go_display()
+
+
+## The boat is moved by this script while its player controls are off. Its speed, collision and
+## handling settings are never touched; velocity is only set so the normal wake is drawn.
+func _apply_arrival(delta: float) -> void:
+	var progress := sin(_intro_elapsed / INTRO_DURATION * PI * 0.5) # Decelerates into the berth.
+	var next := _arrival_position(progress)
+	boat.velocity = (next - boat.global_position) / delta if delta > 0.0 else Vector2.ZERO
+	boat.global_position = next
+	boat.heading = _arrival_heading(progress)
+	boat.queue_redraw()
+
+
+## Bezier control points: start above the chart's top edge, then slide down the open water east
+## of the reefs and bend into the berth, well clear of the reefs, the island and the dock.
+func _arrival_points() -> PackedVector2Array:
+	var berth := manager.boat_spawn
+	return PackedVector2Array([
+		Vector2(berth.x + 36.0, ARRIVAL_START_Y),
+		Vector2(berth.x + 68.0, 140.0),
+		Vector2(berth.x + 56.0, 262.0),
+		berth,
+	])
+
+
+func _arrival_position(progress: float) -> Vector2:
+	var points := _arrival_points()
+	return points[0].bezier_interpolate(points[1], points[2], points[3], progress)
+
+
+## Faces the direction of travel, then swings round to the normal start heading in the last
+## moments, when the boat has all but stopped at its berth.
+func _arrival_heading(progress: float) -> float:
+	var points := _arrival_points()
+	var travel := points[0].bezier_derivative(points[1], points[2], points[3], progress).angle()
+	return lerp_angle(travel, PI, smoothstep(0.85, 1.0, progress))
+
+
+func _build_countdown() -> void:
+	_countdown = Control.new()
+	_countdown.name = "Countdown"
+	_countdown.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_countdown.mouse_filter = Control.MOUSE_FILTER_IGNORE # Never a modal; the world stays visible.
+	_countdown.visible = false
+	_hud.add_child(_countdown)
+	_countdown_caption = _label("RESCUE BEGINS IN", 16, TEAL)
+	_countdown_caption.name = "CountdownCaption"
+	_countdown_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_caption.size = Vector2(400, 24)
+	_countdown_caption.position = COUNTDOWN_CENTER + Vector2(-200, -104)
+	_countdown.add_child(_countdown_caption)
+	_countdown_number = _label("3", 150, GOLD)
+	_countdown_number.name = "CountdownNumber"
+	_countdown_number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_countdown_number.add_theme_constant_override("outline_size", 12)
+	_countdown_number.add_theme_color_override("font_outline_color", INK)
+	_countdown_number.size = Vector2(440, 220)
+	_countdown_number.position = COUNTDOWN_CENTER - _countdown_number.size * 0.5
+	_countdown_number.pivot_offset = _countdown_number.size * 0.5
+	_countdown.add_child(_countdown_number)
+
+
+## Each number pops in slightly large, settles, and dims a little before the next one.
+func _update_countdown_display() -> void:
+	var tick := fposmod(_intro_elapsed, 1.0)
+	_countdown.visible = true
+	_countdown_caption.visible = true
+	_countdown_number.text = str(clampi(ceili(INTRO_DURATION - _intro_elapsed), 1, ceili(INTRO_DURATION)))
+	_countdown_number.add_theme_color_override("font_color", GOLD)
+	_countdown_number.scale = Vector2.ONE * lerpf(1.3, 1.0, ease(minf(tick / 0.25, 1.0), 0.35))
+	_countdown_number.modulate.a = lerpf(1.0, 0.4, smoothstep(0.7, 1.0, tick))
+
+
+## "GO!" appears after gameplay has already started and fades out; it never delays anything.
+func _update_go_display() -> void:
+	_countdown.visible = _go_remaining > 0.0
+	if not _countdown.visible:
+		return
+	var fade := _go_remaining / GO_DURATION
+	_countdown_caption.visible = false
+	_countdown_number.text = "GO!"
+	_countdown_number.add_theme_color_override("font_color", TEAL)
+	_countdown_number.scale = Vector2.ONE * lerpf(1.35, 1.0, fade)
+	_countdown_number.modulate.a = clampf(fade * 1.6, 0.0, 1.0)
 
 
 func _open_menu() -> void:
