@@ -141,7 +141,7 @@ func dispatch_at(point: Vector2) -> bool:
 	if not round_active or get_tree().paused:
 		return false
 	if emergency.state != EmergencyBoat.State.READY:
-		_feedback("Emergency boat unavailable. Check its status above the chart.", "warning")
+		_feedback("Emergency boat unavailable. It is on a mission or recharging.", "warning")
 		return false
 	var target: Survivor = null
 	var best := selection_radius
