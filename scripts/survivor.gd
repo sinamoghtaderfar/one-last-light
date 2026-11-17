@@ -13,6 +13,10 @@ enum State { ACTIVE, ON_MAIN_BOAT, ON_EMERGENCY_BOAT, DELIVERED, LOST }
 @export var survivor_id: int = 1
 @export var visibility_memory_duration: float = 3.0
 
+## Oxygen warning levels in seconds remaining. The map label and the HUD hearts share them.
+const WARNING_SECONDS := 55.0
+const CRITICAL_SECONDS := 30.0
+
 var oxygen_remaining: float = 120.0
 var discovered: bool = false
 var state: State = State.ACTIVE
@@ -92,9 +96,9 @@ func _hide_contact() -> void:
 
 func _draw() -> void:
 	var indicator_color := Color("87dfa3")
-	if oxygen_remaining <= 30.0:
+	if oxygen_remaining <= CRITICAL_SECONDS:
 		indicator_color = Color("fa877a")
-	elif oxygen_remaining <= 55.0:
+	elif oxygen_remaining <= WARNING_SECONDS:
 		indicator_color = Color("ffdc70")
 	if _pulse_time > 0.0:
 		draw_arc(Vector2.ZERO, 12.0 + (1.0 - _pulse_time) * 28.0, 0.0, TAU, 36, Color(indicator_color, _pulse_time * 0.7), 1.5, true)

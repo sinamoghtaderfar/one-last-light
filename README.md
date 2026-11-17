@@ -41,7 +41,7 @@ The orange emergency boat starts with one seat. Right-clicking a visible live co
 | RETURNING | Brings its passenger to harbor. If the target died or boarded the main boat, returns empty. |
 | COOLDOWN | Waits 24 seconds after a successful delivery. An empty return becomes ready immediately. |
 
-Emergency deliveries add one successful rescue and **zero stars**. Losses award zero stars. Only harbor deliveries enter the rescued count. The HUD shows the remaining time, both manifests, each boat's deliveries, total delivered, losses, people still in the water and the session star bank.
+Emergency deliveries add one successful rescue and **zero stars**. Losses award zero stars. Only harbor deliveries enter the rescued count. The top bar shows the remaining time, the main boat's passengers (**Aboard**), **Delivered**, **Lost** and the session **Star Bank**. Between Aboard and Delivered a row of **15 survivor hearts**, one per survivor in ID order, replaces the old "in the water" number. A heart in the water drains from the bottom as that survivor's oxygen runs out, shifting from green to yellow-orange at 55 seconds and red at 30, and only a red heart pulses. Boarding either boat holds the fill and outlines the heart in teal. Delivery to the harbor fills it solid teal with a check mark. A survivor lost to oxygen shows a dark cracked heart. The emergency boat has no status readout in the top bar. Its deliveries still count toward Delivered and the results screen.
 
 ### Ending the level
 
