@@ -12,6 +12,7 @@ godot --headless --path . --quit-after 30
 godot --headless --path . --fixed-fps 60 --script res://tests/runtime_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/tutorial_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/intro_suite.gd
+godot --headless --path . --fixed-fps 60 --script res://tests/hud_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/balance_route.gd
 ```
 
@@ -97,3 +98,28 @@ Verified on Linux with the official Godot 4.7.2 build:
 Mutation checks: the suite fails when the beam is not pointed at the harbor, when gameplay is not stopped during preparation, when the boat starts inside the visible area, when the path crosses a rock or the island or ends off the berth, when the countdown length or speed changes, when Replay skips the countdown or reopens the tutorial, when aiming is left enabled, and when the upgrade or star bank is reset.
 
 Not verified: a Windows desktop run, Firefox or Safari, a GPU renderer, and display sizes other than 1152 × 648.
+
+## Simplified HUD and survivor hearts (`feature/survivor-hearts-hud`)
+
+The top bar now keeps the title, Level 1, TIME, ABOARD, DELIVERED, LOST and STAR BANK, and the 15-survivor heart row sits between ABOARD and DELIVERED. The emergency-boat status line, MAIN SAVES, EMERGENCY SAVES and the numeric IN THE WATER readout are gone, together with their label references. The counters behind them (`main_delivered`, `emergency_delivered`, `active_count()`) and all emergency-boat logic are unchanged, and the results screen still lists both boats' deliveries. `SurvivorHeart` (`scripts/survivor_heart.gd`) draws one heart and reads its own `Survivor` every frame (`state`, `oxygen_remaining`, `oxygen_duration`, `survivor_id`); it keeps no oxygen state of its own. `Survivor` gained two constants, `WARNING_SECONDS = 55` and `CRITICAL_SECONDS = 30`, which the map label and the hearts now share. The one gameplay-text change: the "emergency boat unavailable" message no longer points at a status line that no longer exists.
+
+Note that these thresholds are absolute seconds, as on the map. Survivors 1, 2, 4, 6 and 10 have budgets of 34, 47, 60, 26 and 39 seconds, so their hearts start in warning or critical colours at full fill, and survivor 6 is red from the first second of play. A heart pulses only while its survivor's oxygen is really draining, so nothing pulses during the tutorial, the countdown or the pause screen.
+
+`tests/hud_suite.gd` (80 checks headless, 87 windowed) covers: the removed text and references; layout fit, overlap and gap checks at 1152 × 648; 15 hearts bound one-to-one to the existing survivors in ID order; full hearts and green at full oxygen; fill equal to oxygen_remaining / oxygen_duration from 100% to 0%; the 55 s and 30 s colour levels and smooth colour transitions; a calm pulse only for critical hearts; boarding on the main and emergency boats (secured treatment, frozen fill, scale-pulse animation, not counted as delivered); delivery through the real harbor interaction (filled, animation, stays visible); a real oxygen run-out (hollow, shake, settles dark red, stays in place); replay reset; the pause freeze; and, when windowed, sampled screen pixels for full, half-drained, aboard, delivered and lost hearts. Each section must run to its end or the suite fails. The existing runtime suite's HUD check was rewritten for the new bar and stays at 109 checks.
+
+Verified on Linux with the official Godot 4.7.2 build:
+
+| Run | Result |
+| --- | --- |
+| `runtime_suite.gd` | 109/109 |
+| `tutorial_suite.gd`, headless and windowed | 176/176 and 176/176 |
+| `intro_suite.gd`, headless and windowed | 132/132 and 132/132 |
+| `hud_suite.gd`, `--headless --fixed-fps 60` | 80/80 |
+| `hud_suite.gd`, `--headless` at the natural frame rate | 80/80 |
+| `hud_suite.gd`, windowed under Xvfb (pixel checks) | 87/87 |
+| `balance_route.gd` | Output identical to the baseline commit |
+| Web export in headless Chromium | The hearts drained and changed colour, and a lost survivor showed the broken-heart state with the ID digits rendered |
+
+Mutation checks: the suite fails when the fill is inverted, when boarding is shown as delivered, when every heart pulses, when the warning colour is removed, when a lost heart is deleted, when the pulse ignores pause, when transition animations are missing or survive a replay, when the heart order is reversed, when a removed label is re-added, when a lost heart keeps fill, and when the warning threshold changes.
+
+Not verified: a Windows desktop run, Firefox or Safari, a GPU renderer, and display sizes other than 1152 × 648. `screenshots/gameplay.png` still shows the old top bar.

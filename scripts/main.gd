@@ -8,6 +8,12 @@ const TEXT := Color("e4ece8")
 const MUTED := Color("91abb7")
 const TEAL := Color("7fe0cc")
 const GOLD := Color("ffda92")
+## The six HUD readouts that are plain numbers: caption and left edge inside the top panel.
+## The fifteen survivor hearts fill the gap between ABOARD and DELIVERED.
+const HUD_COLUMNS := [["TIME", 16], ["ABOARD", 132], ["DELIVERED", 746], ["LOST", 880], ["STAR BANK", 996]]
+const HEARTS_LEFT := 252.0
+const HEART_SIZE := 24.0
+const HEART_PITCH := 30.0
 const TUTORIAL_BODY_HEIGHT := 196.0
 const TUTORIAL_BUTTON_WIDTH := 170.0
 const ARROW_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M2 8h11M9 3.5 13.5 8 9 12.5" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -71,7 +77,7 @@ var _notice: Label
 var _round_label: Label
 var _menu: Control
 var _menu_box: VBoxContainer
-var _emergency_label: Label
+var _hearts: Array[SurvivorHeart] = []
 var _purchase_feedback: Label
 var _speed_button: Button
 var _bank_label: Label
@@ -164,25 +170,18 @@ func _build_hud() -> void:
 	var title := _label("ONE LAST LIGHT", 21, TEXT)
 	title.position = Vector2(16, 5)
 	top.add_child(title)
-	_emergency_label = _label("", 15, TEAL)
-	_emergency_label.position = Vector2(298, 9)
-	top.add_child(_emergency_label)
 	_round_label = _label("LEVEL 1", 14, MUTED)
 	_round_label.position = Vector2(994, 9)
 	top.add_child(_round_label)
-	var captions: Array[String] = ["TIME", "ABOARD", "MAIN", "EMERGENCY", "DELIVERED", "LOST", "IN THE WATER", "STAR BANK"]
-	for index in range(captions.size()):
-		var column_x := 16 + index * 139
-		var caption_text := captions[index]
-		if caption_text in ["MAIN", "EMERGENCY"]:
-			caption_text += " SAVES"
-		var caption := _label(caption_text, 11, MUTED)
-		caption.position = Vector2(column_x, 40)
+	for column in HUD_COLUMNS:
+		var caption := _label(column[0], 11, MUTED)
+		caption.position = Vector2(column[1], 40)
 		top.add_child(caption)
 		var value := _label("0", 22, TEXT)
-		value.position = Vector2(column_x, 55)
+		value.position = Vector2(column[1], 55)
 		top.add_child(value)
-		_stat_labels[captions[index]] = value
+		_stat_labels[column[0]] = value
+	_build_hearts(top)
 	var bottom := _panel_at(Rect2(16, 580, 1120, 56), PANEL)
 	_hud.add_child(bottom)
 	_context = _label("", 15, TEXT)
@@ -195,26 +194,41 @@ func _build_hud() -> void:
 	bottom.add_child(_notice)
 
 
+## One heart per survivor, in survivor_id order. Each heart reads its own Survivor, so the row
+## never reorders, and a heart is never added or removed when a survivor changes state.
+func _build_hearts(top: Control) -> void:
+	var caption := _label("SURVIVOR HEARTS", 11, MUTED)
+	caption.position = Vector2(HEARTS_LEFT, 40)
+	top.add_child(caption)
+	var ordered: Array[Survivor] = survivors.duplicate()
+	ordered.sort_custom(func(a: Survivor, b: Survivor) -> bool: return a.survivor_id < b.survivor_id)
+	var row := Control.new()
+	row.name = "SurvivorHearts"
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.position = Vector2(HEARTS_LEFT, 57)
+	top.add_child(row)
+	for index in range(ordered.size()):
+		var heart := SurvivorHeart.new()
+		heart.name = "Heart%02d" % ordered[index].survivor_id
+		heart.size = Vector2(HEART_SIZE, HEART_SIZE)
+		heart.position = Vector2(index * HEART_PITCH, 0)
+		row.add_child(heart)
+		heart.bind(ordered[index])
+		_hearts.append(heart)
+
+
 func _refresh_hud() -> void:
 	if _stat_labels.is_empty() or manager.emergency == null:
 		return
 	_stat_labels["ABOARD"].text = "%d/%d" % [boat.passengers.size(), boat.capacity]
 	_stat_labels["ABOARD"].modulate = GOLD if boat.is_full() else TEAL
-	_stat_labels["MAIN"].text = str(manager.main_delivered)
-	_stat_labels["EMERGENCY"].text = str(manager.emergency_delivered)
 	_stat_labels["DELIVERED"].text = str(manager.rescued_count)
 	_stat_labels["LOST"].text = "%d/%d" % [manager.lost_count, manager.loss_limit]
-	_stat_labels["IN THE WATER"].text = str(manager.active_count())
 	_stat_labels["STAR BANK"].text = str(manager.stars)
 	_stat_labels["STAR BANK"].modulate = GOLD
 	var seconds := ceili(manager.time_remaining)
 	_stat_labels["TIME"].text = "%d:%02d" % [floori(seconds / 60.0), seconds % 60]
 	_stat_labels["TIME"].modulate = GOLD if seconds <= 30 else TEXT
-	_emergency_label.text = "Emergency boat   %d/%d   ·   %s" % [emergency.passengers.size(), emergency.capacity, emergency.state_text()]
-	if is_instance_valid(emergency.target):
-		_emergency_label.text += "   #%02d" % emergency.target.survivor_id
-	elif emergency.state == EmergencyBoat.State.COOLDOWN:
-		_emergency_label.text += "   %ds" % ceili(emergency.cooldown_remaining)
 	_context.text = manager.context_hint()
 	_round_label.text = "LEVEL %d" % manager.round_index
 	_refresh_shop()

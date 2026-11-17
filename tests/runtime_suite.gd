@@ -278,14 +278,24 @@ func _check_hud() -> void:
 	main.call("_refresh_hud")
 	var stats: Dictionary = main.get("_stat_labels")
 	var seconds := ceili(manager.time_remaining)
-	var expected := {"ABOARD": "0/2", "MAIN": "2", "EMERGENCY": "1", "DELIVERED": "3", "LOST": "0/3",
-		"IN THE WATER": "12", "STAR BANK": "6", "TIME": "%d:%02d" % [floori(seconds / 60.0), seconds % 60]}
+	var expected := {"ABOARD": "0/2", "DELIVERED": "3", "LOST": "0/3",
+		"STAR BANK": "6", "TIME": "%d:%02d" % [floori(seconds / 60.0), seconds % 60]}
 	for caption in expected:
 		_expect(stats.has(caption) and stats[caption].text == expected[caption], "HUD %s shows %s" % [caption, expected[caption]])
+	_expect(stats.size() == expected.size(), "The top HUD keeps exactly TIME, ABOARD, DELIVERED, LOST and STAR BANK as numeric readouts")
 	var level_label := main.get("_round_label") as Label
 	_expect(level_label != null and "LEVEL 1" in level_label.text.to_upper(), "HUD identifies Level 1")
-	var label := main.get("_emergency_label") as Label
-	_expect(label != null and "COOLDOWN" in label.text and "0/1" in label.text, "Emergency HUD shows cooldown status and its passenger capacity")
+	_expect(main.get("_emergency_label") == null, "The top HUD no longer carries an emergency-boat status label")
+	# The gameplay counters behind the removed labels still exist and still score.
+	_expect(manager.main_delivered == 2 and manager.emergency_delivered == 1 and manager.active_count() == 12,
+		"Main and emergency delivery counters and the in-water count still drive scoring")
+	var hearts: Array = main.get("_hearts")
+	var in_water := 0
+	for heart: SurvivorHeart in hearts:
+		heart.advance(0.0)
+		if heart.shown_state == Survivor.State.ACTIVE:
+			in_water += 1
+	_expect(hearts.size() == 15 and in_water == 12, "The heart row replaces the in-the-water number: 15 hearts, 12 still in the water")
 
 
 func _check_unavailable_target() -> void:
