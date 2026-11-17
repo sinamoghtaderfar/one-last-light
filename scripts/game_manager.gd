@@ -4,6 +4,7 @@ extends Node
 
 signal state_changed
 signal notification(message: String, tone: String)
+signal round_prepared
 signal round_started
 signal round_ended
 
@@ -75,7 +76,17 @@ func _process(delta: float) -> void:
 		survivor.update_visibility(near_boat or lighthouse.is_illuminated(survivor.global_position), delta)
 
 
+## Prepare and begin in one step. The game UI calls the two halves separately so a short
+## intro can play between them; tests and scripted runs use this directly.
 func start_round() -> void:
+	prepare_round()
+	begin_round()
+
+
+## Resets the whole level to its launch state with every gameplay system still stopped:
+## clock at full time, oxygen full, boats at the harbor, and the beam facing the harbor.
+## Upgrades and the star bank are untouched.
+func prepare_round() -> void:
 	result = Result.NONE
 	main_delivered = 0
 	emergency_delivered = 0
@@ -87,7 +98,16 @@ func start_round() -> void:
 	emergency.reset_boat()
 	for survivor in survivors:
 		survivor.reset_survivor()
-	lighthouse.beam_angle = -PI
+	lighthouse.point_at(harbor.global_position)
+	_set_running(false)
+	round_prepared.emit()
+	state_changed.emit()
+
+
+## Switches every gameplay system on: clock, oxygen, both boats, lighthouse aiming and dispatch.
+func begin_round() -> void:
+	if round_active:
+		return
 	_set_running(true)
 	round_started.emit()
 	state_changed.emit()

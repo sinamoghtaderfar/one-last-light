@@ -15,6 +15,14 @@ func _process(delta: float) -> void:
 		aim_at(get_global_mouse_position(), delta)
 
 
+## Snaps the beam to face a world position at once, e.g. the harbor when a round is prepared.
+func point_at(point: Vector2) -> void:
+	var direction := point - global_position
+	if not direction.is_zero_approx():
+		beam_angle = direction.angle()
+		queue_redraw()
+
+
 func aim_at(point: Vector2, delta: float) -> void:
 	var direction := point - global_position
 	if not direction.is_zero_approx():

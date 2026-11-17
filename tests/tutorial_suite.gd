@@ -173,12 +173,15 @@ func _check_launch() -> void:
 	await _press(launch)
 	launch.pressed.emit() # A stale second press must not start anything.
 	main.call("_launch_first_round")
+	_expect(main.get("_tutorial_open") == false and main.get("_menu") == null and _node("TutorialTitle") == null,
+		"The tutorial closes when Launch Rescue is pressed")
+	_expect(main.get("_intro_active") == true and not manager.round_active and round_starts == starts,
+		"Launch Rescue opens the 3-second countdown first, with no round running yet")
+	await _wait_for_intro()
 	_expect(round_starts == starts + 1, "Launch Rescue starts Level 1 exactly once")
 	_expect(manager.round_active and boat.controls_enabled and lighthouse.enabled and manager.round_index == 1,
 		"Launch activates Level 1, both boats and the lighthouse")
-	_expect(is_equal_approx(manager.time_remaining, 240.0), "The round begins with the full four minutes")
-	_expect(main.get("_tutorial_open") == false and main.get("_menu") == null and _node("TutorialTitle") == null,
-		"The tutorial closes when the round starts")
+	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0, "The round begins with the full four minutes (at most a frame consumed)")
 	await _physics_frames(30)
 	_expect(manager.time_remaining < 240.0 and people[0].oxygen_remaining < people[0].oxygen_duration,
 		"Timer and oxygen run after launch")
@@ -227,10 +230,13 @@ func _check_pause_results_upgrade_and_replay() -> void:
 	_expect(replay != null, "The results screen offers Replay Level 1")
 	var starts := round_starts
 	replay.pressed.emit()
-	_expect(manager.round_active and round_starts == starts + 1 and manager.round_index == 1, "Replay starts Level 1 immediately")
+	_expect(main.get("_intro_active") == true and not manager.round_active and round_starts == starts and manager.round_index == 1,
+		"Replay prepares Level 1 and runs the countdown before activating it")
+	await _wait_for_intro()
+	_expect(manager.round_active and round_starts == starts + 1 and manager.round_index == 1, "Replay then starts Level 1")
 	_expect(main.get("_tutorial_open") == false and main.get("_menu") == null and _node("TutorialTitle") == null,
 		"Replay does not reopen the tutorial")
-	_expect(is_equal_approx(manager.time_remaining, 240.0) and boat.speed_multiplier > 1.0 and manager.stars == bank - price,
+	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0 and boat.speed_multiplier > 1.0 and manager.stars == bank - price,
 		"Replay restores the clock and keeps the purchased upgrade and remaining stars")
 
 
@@ -377,6 +383,15 @@ func _right_click(person: Survivor) -> void:
 	root.push_input(event, true)
 	event.pressed = false
 	root.push_input(event, true)
+
+
+## Lets the level-start countdown play out (a little over 3 seconds of game time).
+func _wait_for_intro() -> void:
+	var guard := 0
+	while main.get("_intro_active") == true and guard < 2400:
+		await process_frame
+		guard += 1
+	_expect(main.get("_intro_active") == false, "The level-start countdown finishes")
 
 
 func _physics_frames(count: int) -> void:
