@@ -1,5 +1,7 @@
+class_name RoutePlanner
 extends RefCounted
-## Visibility graph for the level's static colliders. Every edge must fit the hull.
+## Test support: visibility graph over the level's static colliders, queried with the real boat hull.
+## Every edge is checked with the boat's own physics body, so routes are collision-free by construction.
 
 const CIRCLE_STEPS := 12
 const CLEARANCE := 2.0
@@ -7,20 +9,23 @@ const CLEARANCE := 2.0
 var _boat: CharacterBody2D
 var _world: Node2D
 var _radius: float
+## Extra room kept beside every rock, on top of the hull. Steering by keys wobbles, so routes need slack.
+var _margin: float
 var _graph := AStar2D.new()
 var _built := false
 
 
-func _init(boat: CharacterBody2D, world: Node2D, hull_radius: float) -> void:
+func _init(boat: CharacterBody2D, world: Node2D, hull_radius: float, margin: float = 0.15) -> void:
 	_boat = boat
 	_world = world
 	_radius = hull_radius
+	_margin = margin
 
 
 func clear_segment(start: Vector2, finish: Vector2) -> bool:
 	var pose := _boat.global_transform
 	pose.origin = start
-	return not _boat.test_move(pose, finish - start, null, 0.15, true)
+	return not _boat.test_move(pose, finish - start, null, _margin, true)
 
 
 func route(start: Vector2, finish: Vector2) -> PackedVector2Array:
@@ -59,13 +64,13 @@ func _build_graph() -> void:
 			var circle := collider.shape as CircleShape2D
 			var scale_factor := collider.global_scale.abs()
 			# Tangent chords between adjacent vertices clear the rock plus the hull.
-			var radius := (circle.radius * maxf(scale_factor.x, scale_factor.y) + _radius + CLEARANCE) / cos(PI / CIRCLE_STEPS)
+			var radius := (circle.radius * maxf(scale_factor.x, scale_factor.y) + _radius + _margin + CLEARANCE) / cos(PI / CIRCLE_STEPS)
 			for step in range(CIRCLE_STEPS):
 				var point := collider.global_position + Vector2.from_angle(TAU * step / CIRCLE_STEPS) * radius
 				_add_waypoint(point)
 		elif collider.shape is RectangleShape2D:
 			var rectangle := collider.shape as RectangleShape2D
-			var half_size := rectangle.size * 0.5 * collider.global_scale.abs() + Vector2.ONE * (_radius + CLEARANCE)
+			var half_size := rectangle.size * 0.5 * collider.global_scale.abs() + Vector2.ONE * (_radius + _margin + CLEARANCE)
 			for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
 				var offset: Vector2 = half_size * corner
 				_add_waypoint(collider.global_position + offset.rotated(collider.global_rotation))

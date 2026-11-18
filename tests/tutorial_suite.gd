@@ -10,8 +10,9 @@ const SPEC := [
 	{
 		"title": "Your Mission",
 		"lines": [
-			"Rescue the 15 survivors before the 4-minute timer runs out.",
-			"You can lose up to 2 survivors. A third loss ends the mission.",
+			"Rescue every survivor across 5 levels, one level at a time.",
+			"Deliver them all to the harbor before the 4-minute timer runs out.",
+			"If a survivor runs out of oxygen, the level fails. You can replay it right away.",
 		],
 	},
 	{
@@ -27,16 +28,14 @@ const SPEC := [
 		"lines": [
 			"Use WASD or the arrow keys to steer your rescue boat.",
 			"Press E near a survivor to pick them up, even if they are not currently visible.",
-			"Your boat carries 2 survivors. Return to the harbor and press E to deliver them.",
-			"Each survivor delivered by your main boat earns 3 stars.",
+			"Your boat starts with room for 1 survivor. Return to the harbor and press E to deliver.",
 		],
 	},
 	{
-		"title": "Emergency Rescue",
+		"title": "Earn Stars & Upgrade",
 		"lines": [
-			"Right-click a visible survivor to dispatch the emergency boat.",
-			"It automatically navigates around obstacles, rescues the survivor, and returns to harbor.",
-			"Emergency rescues earn 0 stars and do not deduct existing stars.",
+			"Each survivor you deliver earns 3 stars.",
+			"Between levels, spend stars to carry more survivors or sail faster. Upgrades stay for the whole campaign.",
 			"Press Esc to pause or resume the game.",
 		],
 	},
@@ -47,7 +46,6 @@ var failures: Array[String] = []
 var main: Node
 var manager: RescueGameManager
 var boat: RescueBoat
-var emergency: EmergencyBoat
 var lighthouse: Lighthouse
 var harbor: Harbor
 var people: Array[Survivor] = []
@@ -73,11 +71,10 @@ func _run() -> void:
 	await process_frame
 	manager = main.get("manager") as RescueGameManager
 	boat = main.get("boat") as RescueBoat
-	emergency = main.get("emergency") as EmergencyBoat
 	lighthouse = main.get("lighthouse") as Lighthouse
 	harbor = main.get("harbor") as Harbor
-	if not manager or not boat or not emergency or not lighthouse or not harbor:
-		_expect(false, "Main scene resolves both boats, manager, lighthouse and harbor")
+	if not manager or not boat or not lighthouse or not harbor:
+		_expect(false, "Main scene resolves the boat, manager, lighthouse and harbor")
 		_finish()
 		return
 	people.assign(manager.survivors)
@@ -91,16 +88,20 @@ func _run() -> void:
 	_finish()
 
 
-## The tutorial wording is static, so pin the numbers it quotes to the live rules.
+## The tutorial text is built from the live data; pin what it quotes to the real rules.
 func _check_tutorial_matches_game_rules() -> void:
 	var durations_ok := true
 	for person in people:
 		durations_ok = durations_ok and is_equal_approx(person.visibility_memory_duration, 3.0)
-	_expect(people.size() == 15 and is_equal_approx(manager.level_duration, 240.0) and manager.loss_limit == 3,
-		"Tutorial numbers match the rules: 15 survivors, a 4-minute timer, and a third loss ends the mission")
-	_expect(boat.capacity == 2 and manager.stars_per_survivor == 3 and durations_ok,
-		"Tutorial numbers match the rules: 2 seats, 3 stars per main-boat delivery, 3 seconds of visibility memory")
-	_expect(emergency.capacity == 1, "Tutorial text about the emergency boat still describes a single rescue at a time")
+	_expect(manager.levels.size() == 5 and is_equal_approx(manager.level.time_limit, 240.0),
+		"Tutorial numbers match the rules: 5 levels and a 4-minute timer")
+	_expect(boat.capacity == 1 and manager.stars_per_survivor == 3 and durations_ok,
+		"Tutorial numbers match the rules: 1 starting seat, 3 stars per delivered survivor, 3 seconds of visibility memory")
+	var all_text := ""
+	for step: Dictionary in main.call("_tutorial_content"):
+		all_text += step["title"] + " " + " ".join(step["lines"]) + " "
+	for removed in ["Emergency", "emergency", "Right-click", "15 survivors", "up to 2 survivors"]:
+		_expect(not (removed in all_text), "Tutorial text no longer mentions '%s'" % removed)
 
 
 func _check_startup() -> void:
@@ -135,13 +136,12 @@ func _check_forward_and_back() -> void:
 
 
 func _check_input_isolation() -> void:
-	var person := people[6]
+	var person := people[0]
 	var beam := lighthouse.beam_angle
 	var spawn := boat.global_position
-	var emergency_spot := emergency.global_position
 	_key(KEY_E)
 	_key(KEY_ESCAPE)
-	_right_click(person)
+	_right_click(person) # Right-click no longer does anything in the game.
 	Input.action_press("move_right")
 	Input.action_press("move_up")
 	await _physics_frames(12)
@@ -150,17 +150,14 @@ func _check_input_isolation() -> void:
 	Input.action_release("move_up")
 	_expect(boat.global_position.is_equal_approx(spawn) and boat.velocity == Vector2.ZERO, "WASD cannot move the main boat behind the tutorial")
 	_expect(is_equal_approx(lighthouse.beam_angle, beam), "The mouse cannot aim the lighthouse behind the tutorial")
-	_expect(emergency.state == EmergencyBoat.State.READY and emergency.target == null and emergency.global_position.is_equal_approx(emergency_spot),
-		"Right-click cannot dispatch the emergency boat behind the tutorial")
 	_expect(not paused and main.get("_tutorial_open") == true and main.get("_tutorial_step") == 3 and _node("TutorialLaunch") != null,
 		"Esc neither pauses the game nor dismisses the tutorial")
 	boat.global_position = person.global_position
 	_key(KEY_E)
 	manager.try_interact()
-	_expect(boat.passengers.is_empty() and person.state == Survivor.State.ACTIVE and manager.rescued_count == 0,
+	_expect(boat.passengers.is_empty() and person.state == Survivor.State.ACTIVE and manager.delivered_count == 0,
 		"E beside a survivor cannot rescue anyone before launch")
-	_expect(not manager.dispatch_at(person.global_position) and emergency.state == EmergencyBoat.State.READY,
-		"The manager refuses emergency dispatch before launch")
+	_expect(not manager.has_method("dispatch_at"), "The manager has no emergency dispatch left to call")
 	boat.global_position = spawn
 	await _expect_frozen("After stray keyboard and mouse input")
 	_expect(round_starts == 0, "Stray input never starts a round")
@@ -179,15 +176,15 @@ func _check_launch() -> void:
 		"Launch Rescue opens the 3-second countdown first, with no round running yet")
 	await _wait_for_intro()
 	_expect(round_starts == starts + 1, "Launch Rescue starts Level 1 exactly once")
-	_expect(manager.round_active and boat.controls_enabled and lighthouse.enabled and manager.round_index == 1,
-		"Launch activates Level 1, both boats and the lighthouse")
+	_expect(manager.round_active and boat.controls_enabled and lighthouse.enabled and manager.level_number == 1 and people.size() == 1,
+		"Launch activates Level 1 (one survivor), the boat and the lighthouse")
 	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0, "The round begins with the full four minutes (at most a frame consumed)")
 	await _physics_frames(30)
 	_expect(manager.time_remaining < 240.0 and people[0].oxygen_remaining < people[0].oxygen_duration,
 		"Timer and oxygen run after launch")
 	boat.global_position = people[0].global_position
 	_key(KEY_E)
-	_expect(boat.passengers.size() == 1 and people[0].state == Survivor.State.ON_MAIN_BOAT, "E rescues normally after launch")
+	_expect(boat.passengers.size() == 1 and people[0].state == Survivor.State.ON_BOAT, "E rescues normally after launch")
 
 
 func _check_pause_results_upgrade_and_replay() -> void:
@@ -201,43 +198,44 @@ func _check_pause_results_upgrade_and_replay() -> void:
 	await _physics_frames(3)
 	_expect(manager.time_remaining < remaining, "The clock resumes after pause")
 
-	# Finish the pickup trip, then two more, to bank six personal deliveries (18 stars).
-	boat.global_position = people[1].global_position
-	_key(KEY_E)
+	# Finish Level 1: deliver the one survivor. The level completes and offers the first upgrade.
 	boat.global_position = harbor.global_position
 	_key(KEY_E)
-	for pair in [[2, 3], [4, 5]]:
-		for index in pair:
-			boat.global_position = people[index].global_position
-			_key(KEY_E)
-		boat.global_position = harbor.global_position
-		_key(KEY_E)
-	_expect(manager.main_delivered == 6 and manager.stars == 18, "Main-boat deliveries still earn 3 stars each")
-	manager._process(manager.time_remaining)
-	_expect(not manager.round_active and manager.result == RescueGameManager.Result.TIME_RAN_OUT and _menu_contains("Time Ran Out"),
-		"The results screen appears when the timer expires")
-	var price := manager.speed_cost()
-	var bank := manager.stars
-	var shop := main.get("_speed_button") as Button
-	_expect(shop != null and not shop.disabled, "Earned stars unlock the speed upgrade on the results screen")
-	shop.pressed.emit()
-	_expect(manager.speed_level == 1 and manager.stars == bank - price, "The upgrade is bought at its normal price")
+	_expect(manager.delivered_count == 1 and manager.result == RescueGameManager.Result.VICTORY and manager.level_stars == 3 and manager.stars == 3,
+		"Delivering the only Level 1 survivor wins the level and earns 3 stars")
+	_expect(_menu_contains("LEVEL 1 COMPLETE") and _menu_contains("You earned 3 stars!"), "The results screen shows LEVEL 1 COMPLETE with the stars earned")
+	var upgrade := _node("OfferButton_l1_capacity") as Button
+	_expect(upgrade != null and not upgrade.disabled and upgrade.text == "UPGRADE — 3 STARS", "Earned stars unlock the capacity upgrade in the popup")
+	upgrade.pressed.emit()
+	upgrade.pressed.emit() # A duplicate press must not buy twice.
+	_expect(manager.economy.capacity == 2 and manager.economy.stars == 0, "The upgrade is bought once, at its price")
 
-	var replay: Button = null
-	for button: Button in (main.get("_menu") as Control).find_children("*", "Button", true, false):
-		if button.text == "REPLAY LEVEL 1":
-			replay = button
-	_expect(replay != null, "The results screen offers Replay Level 1")
+	var next: Button = _node("ContinueButton") as Button
+	_expect(next != null and next.text == "CONTINUE TO LEVEL 2", "After buying, the popup continues to Level 2")
 	var starts := round_starts
-	replay.pressed.emit()
-	_expect(main.get("_intro_active") == true and not manager.round_active and round_starts == starts and manager.round_index == 1,
-		"Replay prepares Level 1 and runs the countdown before activating it")
+	next.pressed.emit()
+	_expect(main.get("_intro_active") == true and not manager.round_active and round_starts == starts and manager.level_number == 2,
+		"Continue prepares Level 2 and runs the countdown before activating it")
 	await _wait_for_intro()
-	_expect(manager.round_active and round_starts == starts + 1 and manager.round_index == 1, "Replay then starts Level 1")
+	_expect(manager.round_active and round_starts == starts + 1 and manager.level_number == 2 and manager.survivors.size() == 2,
+		"Level 2 then starts with its two survivors")
 	_expect(main.get("_tutorial_open") == false and main.get("_menu") == null and _node("TutorialTitle") == null,
-		"Replay does not reopen the tutorial")
-	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0 and boat.speed_multiplier > 1.0 and manager.stars == bank - price,
-		"Replay restores the clock and keeps the purchased upgrade and remaining stars")
+		"Continuing does not reopen the tutorial")
+	_expect(boat.capacity == 2, "The purchased capacity carries into Level 2")
+	# Fail Level 2 on the clock and replay it: the upgrade stays.
+	manager._process(manager.time_remaining)
+	_expect(not manager.round_active and manager.result == RescueGameManager.Result.TIME_RAN_OUT and _menu_contains("Time ran out"),
+		"The failure screen appears when the timer expires")
+	var replay := _node("ReplayButton") as Button
+	_expect(replay != null and replay.text == "REPLAY LEVEL 2", "The failure screen offers Replay Level 2")
+	starts = round_starts
+	replay.pressed.emit()
+	_expect(main.get("_intro_active") == true and not manager.round_active and round_starts == starts and manager.level_number == 2,
+		"Replay prepares Level 2 and runs the countdown before activating it")
+	await _wait_for_intro()
+	_expect(manager.round_active and round_starts == starts + 1 and manager.level_number == 2, "Replay then starts Level 2")
+	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0 and boat.capacity == 2,
+		"Replay restores the clock and keeps the purchased capacity")
 
 
 ## Asserts one tutorial page: content, progress, buttons, layout and character coverage.
@@ -320,10 +318,9 @@ func _expect_frozen(context: String) -> void:
 			and is_equal_approx(person.oxygen_remaining, person.oxygen_duration)
 	var clock_text := ((main.get("_stat_labels") as Dictionary)["TIME"] as Label).text
 	_expect(is_equal_approx(manager.time_remaining, 240.0) and clock_text == "4:00", "%s: the timer stays at 4:00" % context)
-	_expect(untouched, "%s: all fifteen oxygen tanks stay full" % context)
-	_expect(not manager.round_active and not boat.controls_enabled and not lighthouse.enabled and boat.velocity == Vector2.ZERO
-		and not emergency.is_physics_processing() and emergency.state == EmergencyBoat.State.READY and emergency.target == null and not paused,
-		"%s: both boats, the lighthouse and pause stay inactive" % context)
+	_expect(untouched, "%s: every oxygen tank stays full" % context)
+	_expect(not manager.round_active and not boat.controls_enabled and not lighthouse.enabled and boat.velocity == Vector2.ZERO and not paused,
+		"%s: the boat, the lighthouse and pause stay inactive" % context)
 
 
 func _node(node_name: String) -> Node:

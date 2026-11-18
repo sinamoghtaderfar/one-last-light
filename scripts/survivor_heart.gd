@@ -69,7 +69,7 @@ func bind(person: Survivor) -> void:
 
 ## Follows the survivor and moves any transition animation forward by delta.
 func advance(delta: float) -> void:
-	if survivor == null:
+	if not is_instance_valid(survivor):
 		return
 	if survivor.state != shown_state:
 		_enter_state(survivor.state)
@@ -86,7 +86,7 @@ func advance(delta: float) -> void:
 
 
 func is_critical() -> bool:
-	return survivor != null and shown_state == Survivor.State.ACTIVE and survivor.oxygen_remaining <= Survivor.CRITICAL_SECONDS
+	return is_instance_valid(survivor) and shown_state == Survivor.State.ACTIVE and survivor.oxygen_remaining <= Survivor.CRITICAL_SECONDS
 
 
 ## True only while this survivor's oxygen is really running. Before launch, during the countdown and
@@ -96,7 +96,7 @@ func is_pulsing() -> bool:
 
 
 func is_aboard() -> bool:
-	return shown_state == Survivor.State.ON_MAIN_BOAT or shown_state == Survivor.State.ON_EMERGENCY_BOAT
+	return shown_state == Survivor.State.ON_BOAT
 
 
 func is_animating() -> bool:
@@ -106,11 +106,11 @@ func is_animating() -> bool:
 ## The colour of the filled part (or of the whole heart once it is delivered or lost).
 func fill_color() -> Color:
 	match shown_state:
-		Survivor.State.ON_MAIN_BOAT, Survivor.State.ON_EMERGENCY_BOAT, Survivor.State.DELIVERED:
+		Survivor.State.ON_BOAT, Survivor.State.DELIVERED:
 			return SECURED_COLOR
 		Survivor.State.LOST:
 			return LOST_FILL
-	return oxygen_color(survivor.oxygen_remaining if survivor != null else 999.0)
+	return oxygen_color(survivor.oxygen_remaining if is_instance_valid(survivor) else 999.0)
 
 
 ## Green while comfortable, amber from the warning level, red from the critical level.
@@ -133,7 +133,7 @@ func visual_scale() -> float:
 	var scale_now := 1.0
 	var progress := _animation_progress()
 	match shown_state:
-		Survivor.State.ON_MAIN_BOAT, Survivor.State.ON_EMERGENCY_BOAT:
+		Survivor.State.ON_BOAT:
 			if progress >= 0.0:
 				scale_now = 1.0 + 0.30 * sin(progress * PI)
 		Survivor.State.DELIVERED:
@@ -238,7 +238,7 @@ func _closed(points: PackedVector2Array) -> PackedVector2Array:
 
 
 func _draw() -> void:
-	if survivor == null or _shape.is_empty():
+	if not is_instance_valid(survivor) or _shape.is_empty():
 		return
 	var alpha := visual_alpha()
 	draw_set_transform(size * 0.5 + visual_offset(), 0.0, Vector2.ONE * visual_scale())
@@ -249,7 +249,7 @@ func _draw() -> void:
 			draw_colored_polygon(_shape, Color(HOLLOW, alpha))
 			_draw_fill(Color(fill_color(), alpha))
 			draw_polyline(_closed(_shape), Color(fill_color().lerp(OUTLINE, 0.45), alpha), 1.4, true)
-		Survivor.State.ON_MAIN_BOAT, Survivor.State.ON_EMERGENCY_BOAT:
+		Survivor.State.ON_BOAT:
 			draw_colored_polygon(_shape, HOLLOW)
 			_draw_fill(Color(SECURED_COLOR, 0.38))
 			draw_polyline(_closed(_shape), SECURED_COLOR, 2.4, true)

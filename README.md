@@ -1,92 +1,120 @@
 # One Last Light — Graybox v0.2
 
-A playable 2D rescue strategy level for Game Production and Management, WS 2026/27. Steer the main boat while aiming the central lighthouse with the mouse. The far side of the chart takes time to reach. Sending the emergency boat there can save a life while you collect closer survivors, at the cost of the three stars you could have earned for that delivery.
+A playable 2D rescue strategy game for Game Production and Management, WS 2026/27, in five levels. You steer one boat while aiming the central lighthouse with the mouse. Find the survivors, carry them to the harbor before their oxygen runs out, and spend the stars you earn on boat upgrades.
 
 ## Open and play
 
-1. Open this checkout on `feature/graybox-v0.2`, or extract the editable source archive.
+1. Open this checkout on `feature/five-level-progression`, or extract the editable source archive.
 2. In Godot **4.7.2 Standard**, import `project.godot` and press **F5**.
 3. Read the four-step tutorial, moving with **Next** and **Back**, then select **Launch Rescue** on the last page. Nothing moves and the clock stays at 4:00 until you do.
-4. A 3 → 2 → 1 countdown plays over the live scene while the white boat sails in from above the chart to the harbor on the right and the lighthouse beam points at the harbor. Controls, the timer and oxygen switch on together when the countdown ends. **Replay Level 1** plays the same countdown again. Level 1 starts with 15 live survivors and 4:00 on the clock.
+4. A 3 → 2 → 1 countdown plays over the live scene while the white boat sails in from above the chart to the harbor on the right and the lighthouse beam points at the harbor. Controls, the timer and oxygen switch on together when the countdown ends. Every level, replay and campaign restart begins with the same countdown.
 
 The project uses GDScript, the Compatibility renderer and Godot's drawing primitives. The base viewport is 1152 × 648. All game content runs locally.
 
-![Level 1 with an emergency boat dispatched to a survivor in the lighthouse beam](screenshots/gameplay.png)
+![Level 5 in progress: six survivors, six hearts, upgraded boat](screenshots/gameplay.png)
 
 ## Controls
 
 | Input | Action |
 | --- | --- |
-| WASD or arrow keys | Steer the main boat. Release the keys to decelerate. |
+| WASD or arrow keys | Steer the boat. Release the keys to decelerate. |
 | Mouse | Aim the lighthouse while steering. |
 | E within 48 px of a live survivor | Pick up the closest person. This works even before discovery. |
-| E in the harbor | Unload everyone aboard the main boat. |
-| Right-click a visible survivor | Dispatch the emergency boat if it is ready. |
-| Esc | Pause or resume the clock, oxygen, visibility memory, both boats and the emergency cooldown. |
-| Left-click | Use launch, resume, upgrade and replay buttons. |
+| E in the harbor | Unload everyone aboard. |
+| Esc | Pause or resume the clock, oxygen, visibility memory, boat and lighthouse. |
+| Left-click | Use launch, upgrade, continue and replay buttons. |
 
-## Running a rescue
+## The five levels
 
-The beam reveals a survivor's ID, position, oxygen bar and seconds remaining. Moving within 64 px of someone also reveals them. A contact stays visible for three seconds after leaving both detection areas. Lighting the same spot again restores the indicator. Green means more than 55 seconds of oxygen, yellow means 31–55 seconds on the display and red means 30 seconds or less.
+Each level has its own survivors, positions and individual oxygen budgets, defined in a `LevelDefinition` resource (`resources/levels/level_1.tres` to `level_5.tres`). Only that level's survivors are created, and a level succeeds only when every one of them is **delivered to the harbor**. A survivor who is aboard is not yet delivered.
 
-Oxygen runs from launch for everyone in the water. A successful pickup immediately freezes that person's oxygen. The main boat starts with two seats. Use the green harbor circle to unload, free both seats and earn **3 stars per person**. Steering into a rock or the island blocks the hull and briefly highlights its outline.
+| Level | Title | Survivors | After the level |
+| ---: | --- | ---: | --- |
+| 1 | First Light | 1 | Popup: capacity 1 → 2 for 3 stars, or NOT NOW |
+| 2 | Two Signals | 2 | Popup: capacity +1 for 6 stars, or NOT NOW |
+| 3 | Crossing Currents | 4 | Continue to Level 4. No upgrade is offered. |
+| 4 | Rocky Waters | 5 | **Prepare for Level 5**: speed +18% for 9 stars *or* capacity +1 for 9 stars, or Keep My Stars |
+| 5 | Last Light | 6 | **All five levels complete** summary |
 
-The orange emergency boat starts with one seat. Right-clicking a visible live contact reserves its destination and marks the target while visible. The boat can finish the trip after the contact fades. The player may still pick that person up first.
+The boat starts with **one seat**, so every level can be finished without a single upgrade by carrying one survivor per trip. Upgrades only make that faster. Level 1 shows a three-second "MOVE YOUR MOUSE" hint above the lighthouse, with a smaller line "Aim the lighthouse beam to find the survivor." It appears just after the GO! flash, never blocks input, fades out by itself, pauses with the game and is shown only in Level 1 (including a Level 1 replay).
 
-| Emergency status | Behavior |
+### Survivors and oxygen
+
+Positions are in open water, at least 40 px of clear water from any rock, the island or the chart edge (the balance suite enforces this and the closest is 42 px). Oxygen is in seconds and starts when the level starts. A successful pickup freezes that person's oxygen.
+
+| Level | Survivor: position → oxygen |
+| ---: | --- |
+| 1 | #1 (215, 335) → 120 s |
+| 2 | #1 (845, 205) → 30 s · #2 (380, 495) → 50 s |
+| 3 | #1 (860, 425) → 30 s · #2 (680, 170) → 40 s · #3 (305, 175) → 85 s · #4 (330, 485) → 60 s |
+| 4 | #1 (900, 200) → 25 s · #2 (720, 500) → 35 s · #3 (480, 240) → 55 s · #4 (150, 300) → 100 s · #5 (420, 500) → 75 s |
+| 5 | #1 (850, 500) → 30 s · #2 (660, 190) → 45 s · #3 (330, 200) → 65 s · #4 (130, 400) → 140 s · #5 (420, 500) → 85 s · #6 (180, 170) → 115 s |
+
+The budgets were derived from real route lengths and the boat's real speed (see [TESTING.md](TESTING.md)). Every level keeps the four-minute clock, which never binds a competent player: with no upgrades the slowest level takes about 107 seconds in the reference run. Oxygen is the real difficulty.
+
+### Stars and upgrades
+
+| Rule | Value |
 | --- | --- |
-| READY | Accepts one assignment. |
-| TRAVELING | Follows a hull-clear route around rocks and the island. |
-| RESCUING | Spends 0.65 seconds at the target. Oxygen continues until pickup succeeds. |
-| RETURNING | Brings its passenger to harbor. If the target died or boarded the main boat, returns empty. |
-| COOLDOWN | Waits 24 seconds after a successful delivery. An empty return becomes ready immediately. |
+| Stars per delivered survivor | 3 |
+| Starting capacity | 1 seat (maximum 4) |
+| Speed | +18% of base per rank (maximum 3 ranks) |
+| Level 1 offer | capacity +1, **3 stars** |
+| Level 2 offer | capacity +1, **6 stars** |
+| Level 4 offer (for Level 5) | speed +18%, **9 stars**, or capacity +1, **9 stars**. Buying one locks the other. |
 
-Emergency deliveries add one successful rescue and **zero stars**. Losses award zero stars. Only harbor deliveries enter the rescued count. The top bar shows the remaining time, the main boat's passengers (**Aboard**), **Delivered**, **Lost** and the session **Star Bank**. Between Aboard and Delivered a row of **15 survivor hearts**, one per survivor in ID order, replaces the old "in the water" number. A heart in the water drains from the bottom as that survivor's oxygen runs out, shifting from green to yellow-orange at 55 seconds and red at 30, and only a red heart pulses. Boarding either boat holds the fill and outlines the heart in teal. Delivery to the harbor fills it solid teal with a check mark. A survivor lost to oxygen shows a dark cracked heart. The emergency boat has no status readout in the top bar. Its deliveries still count toward Delivered and the results screen.
+Stars earned in a level are paid out only when the level succeeds; a failed attempt earns nothing, so a level cannot be replayed for extra stars. The bank, capacity and speed carry through every later level and every replay. Each offer can be bought once. Declining never blocks progress. A declined first upgrade is not skipped: the Level 2 offer shows the real values (1 → 2 passengers) at its own price. **Restart Campaign** on the final screen resets stars, upgrades and totals. Prices and amounts are exported fields on the `UpgradeOffer` resources and the popup text always reads them from the live economy.
 
-### Ending the level
+If you deliver everyone, the totals are 18 survivors rescued and 54 stars earned. The final screen lists total survivors rescued, total stars earned, the remaining bank, the upgrades bought and a victory message.
 
-- **Victory** requires all 15 people accounted for, with 13–15 delivered, at most two lost, and time left. A passenger still aboard either boat keeps the rescue open.
-- **Game Over – Too Many Survivors Lost** appears on the third oxygen death.
-- **Game Over – Time Ran Out** appears when the countdown expires with the rescue unfinished.
+### Ending a level
 
-The results screen reports deliveries, losses, people still in the water and passengers still aboard. Between attempts, spend accumulated stars on **Main Boat Speed**. Each rank adds 18% of base speed. The three prices are **18, 27 and 36 stars**. Six personal deliveries fund the first rank. **Replay Level 1** restores positions, oxygen, visibility, both boats, cooldown and the clock. Banked stars and upgrades carry across attempts in the current application session.
+- **Victory** when every survivor of the level is delivered.
+- **Level N Failed — Survivor lost** the moment one survivor's oxygen runs out.
+- **Level N Failed — Time ran out** when the countdown expires with the rescue unfinished, even if people are still aboard.
 
-## Design changes from v0.1
+**Replay Level N** restores positions, oxygen, visibility, the boat and the clock, keeps the bank and every upgrade you own, and plays the countdown again.
 
-| System | v0.1 | v0.2 |
+## The top bar
+
+TIME, ABOARD (passengers / seats), a row of **survivor hearts**, DELIVERED (n / level total), LOST and STAR BANK, plus the level number ("LEVEL 3 / 5"). There is one heart per survivor of the current level (1, 2, 4, 5 or 6), in ID order, rebuilt whenever a level loads. A heart in the water drains from the bottom as that survivor's oxygen runs out, shifting from green to yellow-orange at 55 seconds and red at 30, and only a red heart pulses. Boarding holds the fill and outlines the heart in teal. Delivery fills it solid teal with a check mark. A survivor lost to oxygen shows a dark cracked heart. Hearts are centered between ABOARD and DELIVERED at equal gaps, so one heart looks as tidy as six.
+
+## Design history
+
+| System | v0.1 | v0.2 (this branch) |
 | --- | --- | --- |
 | Search | Automatic rotating beam and permanent markers | Mouse aim, temporary visual memory and local detection |
-| Survivors and boats | 10 contacts and a three-seat player boat | 15 different oxygen budgets, two player seats and a one-seat autonomous boat |
+| Levels | One map, round counter | Five authored, data-driven levels with 1, 2, 4, 5 and 6 survivors |
+| Boats | Three-seat player boat | One boat that starts with one seat and is upgraded between levels |
 | Pickup | Required discovery | An in-range living survivor can board in darkness |
-| Objective | Resolve the water contacts and unload | Four-minute deadline, immediate failure at three losses and a distinct victory |
-| Economy | Personal deliveries, capacity and speed shop | Personal deliveries earn stars, emergency deliveries count toward victory, Level 1 speed shop |
-| Progression | Increment the round number on the same map | Replay a single authored Level 1 with earned equipment |
+| Economy | Capacity and speed shop after each round | 3 stars per delivery, three capacity offers and one exclusive speed/capacity choice |
+
+The earlier two-boat design (an autonomous emergency boat dispatched by right-click) has been removed completely: no scene, script, HUD readout, tutorial text, input or test remains.
 
 The original project remains available at `graybox-v0.1`.
 
 ## Project structure and tuning
 
-The editable level is `scenes/main.tscn`. It instances the existing boat, lighthouse, survivor, harbor and rock scenes alongside `scenes/emergency_boat.tscn`. `scripts/main.gd` connects input, HUD and screens. `game_manager.gd` coordinates the level, `level_clock.gd` tracks its deadline, and `rescue_economy.gd` handles the session bank and upgrade prices. The five survivor states are `ACTIVE`, `ON_MAIN_BOAT`, `ON_EMERGENCY_BOAT`, `DELIVERED` and `LOST`.
+The editable level is `scenes/main.tscn`. It instances the boat, lighthouse, harbor and rock scenes and has an empty `World/Survivors` node into which the manager spawns each level's survivors. `scripts/main.gd` builds the HUD and screens and forwards input. `game_manager.gd` loads levels, applies the win and fail rules and owns the campaign flow, `level_clock.gd` tracks the deadline and `rescue_economy.gd` holds stars, capacity, speed and purchases. `level_definition.gd`, `survivor_spec.gd` and `upgrade_offer.gd` are the three Resource types behind the level files, and `mouse_cue.gd` draws the Level 1 hint. The four survivor states are `ACTIVE`, `ON_BOAT`, `DELIVERED` and `LOST`.
 
 | Designer control | Default | Edit location |
 | --- | --- | --- |
-| Survivor position, ID and oxygen | 15 individual timers from 26 to 205 s | Survivor instances in `scenes/main.tscn` |
-| Level duration, loss threshold, selection radius | 240 s, 3 losses, 22 px | GameManager exports in `scripts/game_manager.gd` |
-| Main boat handling | 100 px/s, acceleration 300 and deceleration 240 px/s² | `scripts/player_boat.gd` |
-| Main seats, pickup and proximity | 2, 48 px, 64 px | `scripts/player_boat.gd` |
+| Survivors: id, position, oxygen | See the table above | `survivors` in each `resources/levels/level_N.tres` |
+| Level duration, losses allowed, mouse cue, offer screen | 240 s, 0, Level 1 only, per level | The same level file |
+| Upgrade offers: kind, cost, amount, exclusivity | See "Stars and upgrades" | `upgrade_offers` and `offers_exclusive` in the level file |
+| Stars per survivor, starting and maximum capacity, maximum speed ranks | 3, 1, 4, 3 | Exported fields in `scripts/rescue_economy.gd` |
+| Boat handling | 100 px/s, acceleration 300 and deceleration 240 px/s² | `scripts/player_boat.gd` |
+| Pickup and proximity radius | 48 px, 64 px | `scripts/player_boat.gd` |
+| Speed improvement | 18% of base per rank | `speed_bonus_per_level` in `scripts/player_boat.gd` |
 | Lighthouse turning rate, range and full cone width | 6 rad/s, 660 px, 0.48 rad | `scripts/lighthouse.gd` |
 | Visibility memory | 3 s | `visibility_memory_duration` in `scripts/survivor.gd` |
-| Emergency seats, speed, pickup, service and cooldown | 1, 74 px/s, 22 px, 0.65 s, 24 s | `scripts/emergency_boat.gd` |
 | Harbor delivery radius | 62 px | `scripts/harbor.gd` |
-| Personal reward and speed prices | 3 stars, 18 initial price, 9 price increment, 3 ranks | GameManager's exported Economy resource |
-| Speed improvement | 18% of base per rank | `speed_bonus_per_level` in `scripts/player_boat.gd` |
+| Mouse cue duration and start delay | 3 s, 0.8 s after activation | `scripts/mouse_cue.gd`, set in `scripts/main.gd` |
 
-The northwest survivor has an early deadline. Eastern contacts give the player short trips while the emergency boat crosses the chart. Later oxygen budgets allow repeated returns from the west. The fixed-step route checks and remaining playtest questions are documented in [TESTING.md](TESTING.md).
+After changing a level's survivors or oxygen, run `godot --headless --path . --fixed-fps 60 --script res://tests/balance_suite.gd`. It re-validates positions and plays every level with the real boat. `tests/tools/plan_report.gd` prints clearances, route lengths and suggested oxygen budgets while authoring a level.
 
-The emergency boat first checks a direct route. For blocked passages, `scripts/boat_routes.gd` builds an AStar2D graph around the level's static colliders and tests segments with the actual hull. Both boats collide with level obstacles and can pass each other. Fog and storm marks are visual placeholders. Rocks do not occlude the beam.
-
-Only Level 1 is playable. The economy records the planned unlock order for main speed, main capacity, lighthouse range, emergency speed, emergency capacity and emergency cooldown at levels 1–6 respectively. Later levels and their shops are future work. There is no disk save.
+Rocks and the island block the hull. Fog and storm marks are visual placeholders. Rocks do not occlude the beam. There is no disk save: stars and upgrades live for the current application session.
 
 ## Windows and editable source
 
-Play directly in Godot on Windows. To build a standalone executable, install the matching 4.7.2 Standard export templates and use the included **Windows Desktop** x86_64 preset. To create an editable source ZIP, run `python tools/package_project.py` from the checkout. The tool writes `OneLastLight_Graybox_v0.2.zip` and its SHA-256 file beside the checkout. See [TESTING.md](TESTING.md) for the actual verification environment and commands.
+Play directly in Godot on Windows. To build a standalone executable, install the matching 4.7.2 Standard export templates and use the included **Windows Desktop** x86_64 preset. To create an editable source ZIP, run `python tools/package_project.py` from the checkout. The tool writes `OneLastLight_Graybox_v0.2.zip` and its SHA-256 file beside the checkout. See [TESTING.md](TESTING.md) for the verification environment and commands.

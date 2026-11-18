@@ -20,12 +20,10 @@ var failures: Array[String] = []
 var main: Node
 var manager: RescueGameManager
 var boat: RescueBoat
-var emergency: EmergencyBoat
 var lighthouse: Lighthouse
 var harbor: Harbor
 var people: Array[Survivor] = []
 var round_starts: int = 0
-var emergency_home := Vector2.ZERO
 
 
 func _initialize() -> void:
@@ -78,17 +76,15 @@ func _boot(manual: bool) -> void:
 	await process_frame
 	manager = main.get("manager") as RescueGameManager
 	boat = main.get("boat") as RescueBoat
-	emergency = main.get("emergency") as EmergencyBoat
 	lighthouse = main.get("lighthouse") as Lighthouse
 	harbor = main.get("harbor") as Harbor
-	if not manager or not boat or not emergency or not lighthouse or not harbor:
-		_expect(false, "Main scene resolves both boats, manager, lighthouse and harbor")
+	if not manager or not boat or not lighthouse or not harbor:
+		_expect(false, "Main scene resolves the boat, manager, lighthouse and harbor")
 		main = null
 		return
 	people.assign(manager.survivors)
 	round_starts = 0
 	manager.round_started.connect(func() -> void: round_starts += 1)
-	emergency_home = emergency.global_position
 	if manual:
 		main.set_process(false)
 
@@ -189,7 +185,7 @@ func _check_countdown_numbers() -> void:
 		"The number is centred horizontally on the screen and sits over the middle of the sea area, clear of the lighthouse")
 	_expect(number.get_theme_font_size("font_size") >= 120, "The number is large (at least 120 px)")
 	var world := main.get_node("World") as CanvasItem
-	_expect(world.visible and (main as CanvasItem).visible and boat.visible and lighthouse.visible and emergency.visible,
+	_expect(world.visible and (main as CanvasItem).visible and boat.visible and lighthouse.visible,
 		"The gameplay world (lighthouse, boats, rocks) stays visible under the countdown")
 	var shown: Array[String] = []
 	var seconds_each := {}
@@ -264,7 +260,6 @@ func _check_boat_arrival() -> void:
 		"Hand-off is seamless: one frame before activation the boat is already within %.2f px of the spawn and facing its start heading" % last_scripted.distance_to(spawn))
 	_expect(boat.global_position == spawn, "At the end of the countdown the boat sits exactly on its spawn %s (got %s)" % [spawn, boat.global_position])
 	_expect(is_equal_approx(boat.heading, PI) and boat.velocity == Vector2.ZERO, "It ends with its normal start heading and no residual speed")
-	_expect(emergency.global_position == emergency_home, "The orange emergency boat never moved from its harbor spot")
 
 
 func _check_path_clearance() -> void:
@@ -350,8 +345,7 @@ func _check_state_frozen_until_finish() -> void:
 			break
 		all_frozen = all_frozen and not manager.round_active and not boat.controls_enabled and not lighthouse.enabled \
 			and manager.result == RescueGameManager.Result.NONE and is_equal_approx(manager.time_remaining, 240.0) \
-			and manager.stars == stars and manager.main_delivered == 0 and manager.emergency_delivered == 0 and manager.lost_count == 0 \
-			and not emergency.is_physics_processing() and emergency.state == EmergencyBoat.State.READY
+			and manager.stars == stars and manager.delivered_count == 0 and manager.lost_count == 0
 		clock_text_ok = clock_text_ok and _hud_clock() == "4:00"
 		for person in people:
 			oxygen_full = oxygen_full and is_equal_approx(person.oxygen_remaining, person.oxygen_duration)
@@ -359,9 +353,9 @@ func _check_state_frozen_until_finish() -> void:
 			oxygen_full = oxygen_full and not person.is_processing()
 		no_signals = no_signals and emitted.is_empty()
 	_expect(frames > 150, "The intro spans %d simulated frames" % frames)
-	_expect(all_frozen, "For the whole countdown: round inactive, boat and lighthouse locked, emergency boat idle, nothing scored")
+	_expect(all_frozen, "For the whole countdown: round inactive, boat and lighthouse locked, nothing scored")
 	_expect(clock_text_ok, "The HUD timer reads 4:00 for the whole countdown")
-	_expect(oxygen_full, "All fifteen oxygen tanks stay full, and survivors are not processing")
+	_expect(oxygen_full, "Every oxygen tank stays full, and survivors are not processing")
 	_expect(not dead_or_found, "No survivor dies, is rescued or is revealed during the countdown")
 	_expect(no_signals, "No round_started or round_ended event (rescue, stars, victory, failure) fires before the end")
 
@@ -382,8 +376,8 @@ func _check_activation_after_countdown() -> void:
 	_expect(not _intro_active() and extra <= 4 and is_equal_approx(_elapsed(), 3.0), "The intro ends at 3 s (%d more frames after 2.95 s)" % extra)
 	_expect(boat.global_position == manager.boat_spawn and boat.velocity == Vector2.ZERO,
 		"Exactly at the end the boat is on its spawn")
-	_expect(manager.round_active and boat.controls_enabled and lighthouse.enabled and emergency.is_physics_processing() and round_starts == 1,
-		"Boat controls, mouse aiming, emergency dispatch and the round all activate together, once")
+	_expect(manager.round_active and boat.controls_enabled and lighthouse.enabled and round_starts == 1,
+		"Boat controls, mouse aiming and the round all activate together, once")
 	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0, "The 4:00 clock starts only now")
 	var survivor_processing := true
 	for person in people:
@@ -400,11 +394,6 @@ func _check_activation_after_countdown() -> void:
 		and is_equal_approx(boat.turn_speed, 10.0) and is_equal_approx(boat.speed_multiplier, 1.0),
 		"Speed, acceleration, deceleration and turn rate are the normal values")
 	_expect(boat.collision_layer == 2 and boat.collision_mask == 1, "Collision layers are unchanged")
-	# Emergency dispatch works after the countdown.
-	var target := people[0]
-	target.discovered = true
-	_expect(manager.dispatch_at(target.global_position) or emergency.state != EmergencyBoat.State.READY,
-		"The emergency boat can be dispatched after the countdown")
 
 
 func _check_frame_rate_independence() -> void:
@@ -471,7 +460,7 @@ func _check_live_input_is_ignored() -> void:
 	_expect(start_y < SEA_TOP - 20.0, "(live) the boat starts above the visible sea")
 	Input.action_press("move_left")
 	Input.action_press("move_down")
-	var target := people[9]
+	var target := people[0]
 	var click_world := target.global_position
 	var ok_positions := true
 	var ok_locks := true
@@ -491,8 +480,7 @@ func _check_live_input_is_ignored() -> void:
 		var path_point: Vector2 = main.call("_arrival_position", progress)
 		ok_positions = ok_positions and boat.global_position.distance_to(path_point) < 1.5
 		ok_locks = ok_locks and not manager.round_active and not boat.controls_enabled and not lighthouse.enabled
-		ok_quiet = ok_quiet and emergency.state == EmergencyBoat.State.READY and emergency.target == null \
-			and emergency.global_position == emergency_home and main.get("_paused") == false and not get_root().get_tree().paused
+		ok_quiet = ok_quiet and boat.passengers.is_empty() and main.get("_paused") == false and not get_root().get_tree().paused
 		for person in people:
 			ok_oxygen = ok_oxygen and is_equal_approx(person.oxygen_remaining, person.oxygen_duration) and person.state == Survivor.State.ACTIVE
 		ok_oxygen = ok_oxygen and boat.passengers.is_empty() and is_equal_approx(manager.time_remaining, 240.0)
@@ -501,7 +489,7 @@ func _check_live_input_is_ignored() -> void:
 	_expect(frames > 100, "(live) the real frame loop ran the intro for %d frames" % frames)
 	_expect(ok_positions, "(live) held steering keys never move the boat off its scripted path")
 	_expect(ok_locks, "(live) round, boat controls and lighthouse stay locked during the countdown")
-	_expect(ok_quiet, "(live) E, Esc and a right-click on a survivor do nothing: no pickup, no pause, no dispatch")
+	_expect(ok_quiet, "(live) E, Esc and a right-click on a survivor do nothing: no pickup and no pause")
 	_expect(ok_oxygen, "(live) timer and oxygen stay frozen, nobody is picked up")
 	await process_frame
 	_expect(manager.round_active and boat.global_position.distance_to(manager.boat_spawn) < 2.0 and boat.controls_enabled and lighthouse.enabled,
@@ -524,28 +512,30 @@ func _check_replay() -> void:
 	var dt := 1.0 / 60.0
 	while _intro_active():
 		_step(dt)
-	# Earn stars with four real trips (2 survivors each), buy the upgrade, then run out the clock.
-	for pair in [[0, 1], [2, 3], [4, 5], [6, 7]]:
-		for index in pair:
-			boat.global_position = people[index].global_position
-			manager.try_interact()
-		boat.global_position = harbor.global_position
-		manager.try_interact()
-	_expect(manager.stars == 24 and manager.main_delivered == 8, "(setup) eight main-boat deliveries banked 24 stars")
+	# Win Level 1 by a real delivery, keep the three stars, and move on to Level 2.
+	boat.global_position = people[0].global_position
+	manager.try_interact()
+	boat.global_position = harbor.global_position
+	manager.try_interact()
+	_expect(manager.stars == 3 and manager.result == RescueGameManager.Result.VICTORY and main.get("_menu") != null,
+		"(setup) Level 1 was delivered: 3 stars banked and the completion screen is open")
+	# Test fixture: arrive at Level 2 already carrying upgrades, so the replays can prove they last.
+	manager.economy.capacity = 2
+	manager.economy.speed_level = 1
+	_find_button("ContinueButton").pressed.emit() # NOT NOW: keep the stars.
+	while _intro_active():
+		_step(dt)
+	_expect(manager.level_number == 2 and manager.round_active and boat.capacity == 2 and manager.stars == 3,
+		"(setup) Level 2 is running with the carried capacity, speed and banked stars")
+	var upgraded_speed := boat.speed_multiplier
 	lighthouse.beam_angle = 2.5
 	manager._process(manager.time_remaining)
-	_expect(not manager.round_active and main.get("_menu") != null, "(setup) the round ended and the results screen is open")
-	var bought := manager.buy_speed_upgrade()
+	_expect(not manager.round_active and main.get("_menu") != null, "(setup) the round ended and the failure screen is open")
 	var bank := manager.stars
-	_expect(bank > 0, "(setup) some unspent stars remain after the purchase (%d)" % bank)
-	_expect(bought and boat.speed_multiplier > 1.0, "(setup) a speed upgrade is purchased")
-	var upgraded_speed := boat.speed_multiplier
+	_expect(bank == 3, "(setup) the banked stars survive the failed attempt (%d)" % bank)
 	for round_number in range(1, 4):
-		var replay: Button = null
-		for button: Button in (main.get("_menu") as Control).find_children("*", "Button", true, false):
-			if button.text == "REPLAY LEVEL 1":
-				replay = button
-		_expect(replay != null, "Replay #%d: the results screen offers Replay Level 1" % round_number)
+		var replay: Button = _find_button("ReplayButton")
+		_expect(replay != null and replay.text == "REPLAY LEVEL 2", "Replay #%d: the results screen offers Replay Level 2" % round_number)
 		if replay == null:
 			return
 		var starts := round_starts
@@ -556,14 +546,15 @@ func _check_replay() -> void:
 		_expect(boat.global_position.y < SEA_TOP - 20.0 and (main.get("_countdown") as Control).visible and _number_label().text == "3",
 			"Replay #%d: the boat is back above the sea and the countdown restarts at 3" % round_number)
 		_expect(_angle_gap(lighthouse.beam_angle, _harbor_angle()) < 0.0001, "Replay #%d: the beam is reset toward the harbor" % round_number)
-		_expect(is_equal_approx(manager.time_remaining, 240.0) and manager.main_delivered == 0 and manager.lost_count == 0
-			and manager.result == RescueGameManager.Result.NONE and boat.passengers.is_empty() and emergency.global_position == emergency_home,
-			"Replay #%d: round state is reset as before (4:00, no deliveries, boats home)" % round_number)
-		_expect(manager.stars == bank and is_equal_approx(boat.speed_multiplier, upgraded_speed), "Replay #%d: the star bank and the upgrade persist" % round_number)
+		_expect(is_equal_approx(manager.time_remaining, 240.0) and manager.delivered_count == 0 and manager.lost_count == 0
+			and manager.result == RescueGameManager.Result.NONE and boat.passengers.is_empty(),
+			"Replay #%d: round state is reset as before (4:00, no deliveries)" % round_number)
+		_expect(manager.stars == bank and is_equal_approx(boat.speed_multiplier, upgraded_speed) and boat.capacity == 2,
+			"Replay #%d: the star bank, speed and capacity persist" % round_number)
 		var oxygen_full := true
-		for person in people:
+		for person in manager.survivors:
 			oxygen_full = oxygen_full and is_equal_approx(person.oxygen_remaining, person.oxygen_duration) and person.state == Survivor.State.ACTIVE
-		_expect(oxygen_full, "Replay #%d: all fifteen survivors are fresh" % round_number)
+		_expect(oxygen_full and manager.survivors.size() == 2, "Replay #%d: both Level 2 survivors are fresh" % round_number)
 		while _intro_active():
 			_step(dt)
 		_expect(manager.round_active and round_starts == starts + 1 and boat.global_position == manager.boat_spawn and manager.stars == bank,

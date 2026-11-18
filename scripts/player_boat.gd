@@ -12,10 +12,10 @@ signal passenger_count_changed
 @export var proximity_radius: float = 64.0
 @export var turn_speed: float = 10.0
 @export_category("Upgrades")
-@export_range(1, 12) var initial_capacity: int = 2
+@export_range(1, 12) var initial_capacity: int = 1
 @export var speed_bonus_per_level: float = 0.18
 
-var capacity: int = 2
+var capacity: int = 1
 var passengers: Array[Survivor] = []
 var speed_multiplier: float = 1.0
 var controls_enabled: bool = true
@@ -46,8 +46,9 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 
-func apply_upgrades(capacity_level: int, speed_level: int) -> void:
-	capacity = initial_capacity + maxi(capacity_level, 0)
+## The economy owns the real values; the boat only applies them. capacity is the total seat count.
+func apply_upgrades(total_capacity: int, speed_level: int) -> void:
+	capacity = maxi(total_capacity, 1)
 	speed_multiplier = 1.0 + maxi(speed_level, 0) * speed_bonus_per_level
 	passenger_count_changed.emit()
 	queue_redraw()

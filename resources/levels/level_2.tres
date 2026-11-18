@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="LevelDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/level_definition.gd" id="1_level"]
+[ext_resource type="Script" path="res://scripts/survivor_spec.gd" id="2_spec"]
+[ext_resource type="Script" path="res://scripts/upgrade_offer.gd" id="3_offer"]
+
+[sub_resource type="Resource" id="Resource_s1"]
+script = ExtResource("2_spec")
+survivor_id = 1
+position = Vector2(845, 205)
+oxygen_seconds = 30
+
+[sub_resource type="Resource" id="Resource_s2"]
+script = ExtResource("2_spec")
+survivor_id = 2
+position = Vector2(380, 495)
+oxygen_seconds = 50
+
+[sub_resource type="Resource" id="Resource_o_l2_capacity"]
+script = ExtResource("3_offer")
+id = &"l2_capacity"
+kind = 0
+cost = 6
+amount = 1
+
+[resource]
+script = ExtResource("1_level")
+level_number = 2
+title = "Two Signals"
+survivors = Array[ExtResource("2_spec")]([SubResource("Resource_s1"), SubResource("Resource_s2")])
+time_limit = 240
+allowed_losses = 0
+show_mouse_cue = false
+offer_screen = 1
+upgrade_offers = Array[ExtResource("3_offer")]([SubResource("Resource_o_l2_capacity")])
+offers_exclusive = false

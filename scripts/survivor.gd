@@ -7,7 +7,7 @@ signal picked_up(survivor: Survivor)
 signal transported(survivor: Survivor)
 signal lost(survivor: Survivor)
 
-enum State { ACTIVE, ON_MAIN_BOAT, ON_EMERGENCY_BOAT, DELIVERED, LOST }
+enum State { ACTIVE, ON_BOAT, DELIVERED, LOST }
 
 @export var oxygen_duration: float = 120.0
 @export var survivor_id: int = 1
@@ -65,17 +65,17 @@ func discover() -> void:
 	queue_redraw()
 
 
-func pick_up(emergency: bool = false) -> bool:
+func pick_up() -> bool:
 	if state != State.ACTIVE or oxygen_remaining <= 0.0:
 		return false
-	state = State.ON_EMERGENCY_BOAT if emergency else State.ON_MAIN_BOAT
+	state = State.ON_BOAT
 	_hide_contact()
 	picked_up.emit(self)
 	return true
 
 
 func deliver() -> void:
-	if state != State.ON_MAIN_BOAT and state != State.ON_EMERGENCY_BOAT:
+	if state != State.ON_BOAT:
 		return
 	state = State.DELIVERED
 	transported.emit(self)
