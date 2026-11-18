@@ -1,6 +1,6 @@
-# Verification — One Last Light v0.2
+# Verification — One Last Light v0.2, five-level campaign
 
-Tested on Windows on 13 November 2026 with Godot 4.7.2 Standard, `4.7.2.stable.official.ed1daf0bf`. The v0.1 tag at `e4a78ab` passed its original **57/57** checks when independently extracted and executed on this machine.
+Branch `feature/five-level-progression`. Everything below was run on Linux with the official Godot 4.7.2 Standard build (`4.7.2.stable.official.ed1daf0bf`), headless, windowed under Xvfb (Mesa llvmpipe, OpenGL 3.3 Compatibility) and as a single-threaded Web export in headless Chromium. It was **not** run on a Windows desktop, with a GPU renderer, in Firefox or Safari, or at display sizes other than 1152 × 648.
 
 ## Reproduce
 
@@ -13,113 +13,123 @@ godot --headless --path . --fixed-fps 60 --script res://tests/runtime_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/tutorial_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/intro_suite.gd
 godot --headless --path . --fixed-fps 60 --script res://tests/hud_suite.gd
-godot --headless --path . --fixed-fps 60 --script res://tests/balance_route.gd
+godot --headless --path . --fixed-fps 60 --script res://tests/progression_suite.gd
+godot --headless --path . --fixed-fps 60 --script res://tests/balance_suite.gd
 ```
 
-The editor import and main-scene startup completed with exit code 0. The expanded runtime suite passed **109/109 checks**, exit code 0. The three balance scenarios also completed with exit code 0. The engine reported no script or resource errors in these runs. The full runtime output is in [tests/runtime_suite.log](tests/runtime_suite.log).
+Each suite prints `NAME SUITE: n/n checks passed` and exits non-zero on any failure. The tutorial, intro and HUD suites need a window for their real mouse clicks and pixel checks; under Xvfb, prefix them with `xvfb-run -a -s "-screen 0 1280x800x24"` and add `--rendering-driver opengl3` instead of `--headless`. In `--headless` mode the display server drops mouse events, so those suites press buttons by emitting their `pressed` signal, and the log header (`Display: headless` or `Display: X11`) says which mode ran. `tests/tools/plan_report.gd` is an authoring aid, not a test.
 
-## Gameplay coverage
+## Results
 
-| Area | What the runtime suite exercised |
+| Run | Result |
 | --- | --- |
-| Launch and level | Configured main scene, 15 unique IDs, positions and oxygen budgets, both boats at harbor, starting seats, 240-second timer, oxygen held during briefing |
-| Lighthouse | Gradual turn toward the cursor, stable aim at rest, range and cone exclusion, temporary visibility through 2.95 seconds, hidden after 3.01 seconds, immediate rediscovery |
-| Main boat | Input acceleration and deceleration, sustained collision with a real rock, blocking island shape, in-range E before any discovery tick, proximity reveal, full boat rejection |
-| Oxygen and scoring | Immediate oxygen freeze on either boat, no rescue credit before delivery, automatic or manual unloading, 3 stars per personal delivery, existing star balance preserved by emergency rescue |
-| Emergency navigation | Right-click, invalid and duplicate assignments, independent motion, swept hull clearance around rocks and island on both legs, remembered target after fade, automatic return if the player intercepts a target or its oxygen expires |
-| Availability and pause | All five boat states, cooldown rejection and recovery, Esc freezes level time, oxygen, both boats, lighthouse and cooldown, resume continues the assignment |
-| Outcomes and HUD | Separate death and timeout screens, third loss ends the round immediately, countdown expiration with passengers aboard, 13 deliveries with 2 losses, all 15 delivered, final passenger on each boat, HUD totals and cooldown display |
-| Economy and replay | Results-screen purchase, insufficient funds, increasing prices, maximum rank, actual higher top speed under input, session bank retained, clean replay of Level 1 |
+| `--editor --quit` import and `--quit-after 30` startup, with the emergency-boat files deleted | Exit 0, no errors |
+| `runtime_suite.gd`, headless | 76/76 |
+| `tutorial_suite.gd`, headless | 185/185 |
+| `tutorial_suite.gd`, windowed (real mouse click events) | 185/185 |
+| `intro_suite.gd`, headless | 130/130 |
+| `intro_suite.gd`, windowed | 130/130 |
+| `hud_suite.gd`, headless | 160/160 |
+| `hud_suite.gd`, windowed (adds the sampled-pixel section) | 167/167 |
+| `progression_suite.gd`, headless | 632/632 |
+| `progression_suite.gd`, windowed | 632/632 |
+| `runtime_suite.gd`, windowed | 76/76 |
+| `balance_suite.gd`, headless | 179/179 |
 
-The suite uses real input events, game signals, colliders, states and HUD labels. Some transition tests position the player directly or advance a timer to a boundary. A separate reachability check sent the emergency boat to each of the 15 authored contacts and back individually. Twelve trips required obstacle waypoints. Sampling hull clearance against the static shapes at each physics tick found zero penetrations. Individual round trips took 4.52–25.70 seconds before cooldown.
+The windowed runs print one `ERR_CANT_OPEN` line from the audio driver (no sound card in the sandbox). Godot falls back to a dummy driver; the baseline logs show the same line.
 
-## Unupgraded Level 1 routes
+The five suites that existed before this work were ported to the one-boat, five-level game, not deleted. Their check counts changed because checks that only made sense with the emergency boat were removed and the rest were reworded for the new rules:
 
-The balance script loads a fresh level for each run, steers the main boat with movement actions, and sails around the authored obstacles using the starting equipment. It uses the actual oxygen timers, visibility updates, emergency AI, pickup distance and harbor interactions. The scripted pilot knows the map and aims at known coordinates. All routes include a four-second initial survey, a decision delay per trip and 0.8 seconds of sighting per active contact on the main boat's route. The clock continues throughout.
+| Suite | Baseline | Now | What changed |
+| --- | ---: | ---: | --- |
+| runtime | 109 | 76 | Rewritten around Level 1 as shipped plus a Level 3 capacity fixture. Dropped: emergency navigation, availability, dispatch and emergency-victory checks (about 31), and the old rules they sat beside (15 survivors, two seats, three-loss threshold, results-screen speed shop prices). Their replacements are in the progression and balance suites. |
+| tutorial | 176 | 185 | New page text, dynamic-content checks, no right-click dispatch, and a Level 1 win → upgrade → Level 2 → timeout → replay flow. |
+| intro | 132 | 130 | Emergency references removed. The replay section now wins Level 1, fixes up capacity and speed, fails Level 2 and replays it three times. |
+| hud | 80 / 87 windowed | 160 / 167 | 15 fixed hearts replaced by dynamic hearts for all five levels, restart, replay and advance, plus equal-gap layout checks. |
+| balance_route | 3 scenarios | replaced by `balance_suite` | The emergency-boat reference routes no longer exist. |
 
-| Route | Decision time per trip | Main delivered | Emergency delivered | Lost | Stars | Elapsed | Smallest oxygen reserve at pickup |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Mixed fleet | 3 s | 14 | 1 | 0 | 42 | 129.88 s | 9.32 s |
-| Main boat only | 3 s | 14 | 0 | 1 | 42 | 153.78 s | 1.58 s |
-| Main boat only, faster decisions | 1 s | 15 | 0 | 0 | 45 | 137.78 s | 3.95 s |
+## Progression suite (`tests/progression_suite.gd`, 632 checks)
 
-The mixed route assigns the distant northwest contact (#06, 26 seconds of oxygen) to the emergency boat at launch. The player takes the eastern pair #01 and #10 first and uses seven two-seat trips. The solo routes start with the northwest pair #06 and #12. With three seconds of decision time, the solo boat loses one person even though it finishes well inside the global deadline. Sending the emergency boat saves that life for the same 42 stars. A quicker solo pilot can earn all 45. These runs establish the feasibility of the routes and illustrate where oxygen, travel and the second seat affect the decision.
+It drives the real Main scene through its own screens. Where a step would need real piloting, the boat is placed by hand beside a survivor and E is pressed through the game manager; physics is the balance suite's job.
+
+| Area | What it checks |
+| --- | --- |
+| Level data | Exactly five levels. Survivor counts 1, 2, 4, 5 and 6, with unique ids, unique positions and individual positive oxygen. Only the loaded level's survivors exist anywhere in the scene tree. The 4:00 clock, mouse cue only on Level 1, offer table (3, 6, and the exclusive 9 + 9 choice), +18% speed step. |
+| Hearts and HUD | One heart per survivor, each bound to a survivor of that level, "LEVEL n / 5", 0/n delivered, starting capacity 1 and no stars. |
+| Level 1 cue | Hidden before activation and during the whole intro. Starts at activation but stays invisible while GO! is on screen, then fades in, holds, fades out and disappears after about 3 s. Anchored to the lighthouse, inside the chart, covering neither lighthouse, harbor nor survivor, exact text, no controls, does not block steering or the clock, freezes with pause, does not restart in the same level, absent in Level 2, replays on a Level 1 replay and after a campaign restart. |
+| Rescue and Level 1 popup | The survivor is far from the harbor. Boarding is not a win and earns nothing. Delivery wins exactly once (forced second `_end_round` calls change nothing), 3 stars, "LEVEL 1 COMPLETE", "You earned 3 stars!", "Upgrade your boat capacity from 1 to 2 passengers?", `UPGRADE — 3 STARS` and `NOT NOW`. Three presses buy once, cost exactly 3, the popup keeps saying 1 to 2 afterwards, and a double click on Continue does not skip Level 2. |
+| Declining | NOT NOW buys nothing, keeps the stars and continues. Level 2 is won in two trips with capacity 1. The Level 2 offer then shows the real 1 to 2 values at 6 stars. |
+| Three whole campaigns | Speed branch (L1 and L2 capacity, then speed), capacity branch (three capacity upgrades), and no upgrades with one survivor per trip. For every level: the right survivors, hearts and boat seats and speed, HUD seats and bank, cue only in Level 1, ceil(n / capacity) trips, one victory, 3 stars per survivor, bank arithmetic, Level 3 forces no upgrade, Level 4 opens "PREPARE FOR LEVEL 5" with "Six survivors are waiting. Choose your next boat upgrade.", both cards at 9 stars with real before and after values, Keep My Stars, the other upgrade locked after one is bought and refusing presses, "START LEVEL 5", no tutorial reopening. Final screen: ALL FIVE LEVELS COMPLETE, victory message, 18 rescued, 54 earned, the remaining bank, the upgrade summary, Restart Campaign, no sixth level. |
+| Economy guards | One star short disables the button but still shows the real price and says how many stars are missing. A press on the disabled button, an unknown offer, or a mid-level purchase changes nothing. Capacity stops at its maximum without spending a star. |
+| Failure and replay | Timeout and survivor loss each end the level exactly once. The reason is shown. Unbanked stars from an unfinished attempt vanish. Replay replays the countdown, restores survivors, hearts and clock, keeps upgrades and the bank, and does not reopen the tutorial or duplicate survivors or hearts. A lost survivor is restored. All survivors aboard is not a win. |
+| Restart | Stars, capacity, speed, totals and purchase history reset, one survivor and one heart, the cue plays again, the first offer can be bought exactly once again. The final screen's own button does the same and a double click starts only one countdown. |
+| Emergency boat gone | No node, script, label, button or property in the running game mentions an emergency boat. No input action does. Exactly one `RescueBoat`. A right-click on a survivor does nothing. `main.gd` and `game_manager.gd` contain no emergency or right-click code. |
+
+The countdown is exercised at every level of every campaign: during the intro the clock stays at the level's full time, every oxygen tank stays full and the boat and beam stay off, and gameplay starts when it ends.
+
+## Balance suite (`tests/balance_suite.gd`, 179 checks)
+
+Level data is validated first: counts, unique ids and positions, survivors at least 100 px apart so labels never overlap, at least 40 px of clear water around each (the closest is 42 px), clear of the harbor and the lighthouse, reachable by a collision-free route, Level 1 at least 600 px from the harbor with at least 120 s of oxygen.
+
+Then a bot plays every level with the real engine. It steers with the real input actions (eight-way held keys, as on a keyboard), follows hull-clear routes planned with `RoutePlanner` (a visibility graph on `AStar2D` that tests segments with the boat's own collision shape, kept 10 px from obstacles), aims the beam, presses E and unloads. `LevelPlanner` chooses the survivor order and trip split that maximise the smallest oxygen reserve; its time model uses a 34 px standoff, a 1.06 turn factor, 3 s per trip and 1 s per pickup. The bot's foreknowledge of the map is the limit of this method: it shows that a good route exists and how tight it is, not how long a new player needs to find the survivors.
+
+Each run must win, finish with at least 40% of the 240 s clock left, keep at least 8 s of oxygen in reserve at every pickup, and pay 3 stars per delivery. The 15 configurations cover every state a player can reach at each level. Oxygen budgets were set from the planner's times, then retuned until the tightest no-upgrade reserve was around 18 to 24 s.
+
+| Level | Boat | Elapsed (s) | Tightest oxygen reserve at pickup (s) | Trips |
+| --- | --- | ---: | ---: | --- |
+| 1 | capacity 1 | 21.6 | 107.8 | 1 |
+| 2 | capacity 1 (declined L1) | 29.2 | 23.7 | 1 + 1 |
+| 2 | capacity 2 | 20.0 | 24.1 | 2 together |
+| 3 | capacity 1 | 62.4 | 23.4 | four single trips |
+| 3 | capacity 2 | 39.2 | 24.3 | 2 + 2 |
+| 3 | capacity 3 | 35.6 | 22.5 | 1 + 3 |
+| 4 | capacity 1 | 82.9 | 19.2 | five single trips |
+| 4 | capacity 2 | 61.7 | 17.4 | 1 + 2 + 2 |
+| 4 | capacity 3 | 40.5 | 19.3 | 2 + 3 |
+| 5 | capacity 1, no upgrades | 106.5 | 18.0 | six single trips |
+| 5 | capacity 1, speed +18% | 99.6 | 23.6 | six single trips |
+| 5 | capacity 2 | 70.9 | 23.6 | 2 + 2 + 2 |
+| 5 | capacity 3 | 63.2 | 24.0 | 3 + 3 |
+| 5 | capacity 3, speed +18% | 55.2 | 23.8 | 3 + 3 |
+| 5 | capacity 4 | 55.7 | 24.0 | 2 + 4 |
+
+Every level is therefore solvable with capacity 1 and no upgrades, and the 240 s deadline never decides a level for a pilot this good. The reserves say the oxygen budgets bind. A new player will lose more time searching, so playtests should decide whether any budget needs loosening.
+
+## Mutation checks
+
+Each row is a deliberate one-line break of the game; the suite named must fail.
+
+| Break | Result |
+| --- | --- |
+| Cue lasts 6 s instead of 3 | progression fails (1 check) |
+| Cue shown in every level | progression fails (14) |
+| Cue starts during the intro | progression fails (17) |
+| Intro starts gameplay early | progression fails (39) |
+| An upgrade can be bought twice | progression fails (23) |
+| An upgrade jumps two steps (1 → 3) | progression fails (55) |
+| An upgrade costs nothing | progression fails (37) |
+| Exclusive Level 5 offers not locked | progression fails (16) |
+| Failed attempts bank their stars | progression fails (2) |
+| Survivors aboard count as a win | progression fails (126) |
+| Previous level's survivors not cleared | progression fails (143) |
+| Restart keeps claimed offers | progression fails (2) |
+| Restart screen button skips the reset | progression fails (2) |
+| A sixth level is reachable | progression fails (3) |
+| A finished level can be ended and paid a second time | **first survived**; a forced double `_end_round` check was added and the break now fails (2) |
+| Replay does not re-apply the upgrades | progression fails (1, only through a campaign restart) |
+
+The HUD, intro, runtime and tutorial suites kept the mutation checks recorded for the features they were first written for, and their ported assertions were not weakened.
 
 ## Rendered review
 
-The game also ran under the Windows Compatibility renderer on an NVIDIA GeForce RTX 5070 Laptop GPU (OpenGL 3.3). At 1152 × 648, the briefing, gameplay, pause, victory, both failure messages and the purchased-upgrade screen were inspected for text fit, HUD readability and dispatch feedback. The five current captures in `screenshots/` cover briefing, gameplay, pause, debrief and upgrade. The debrief and upgrade captures use scripted deliveries for screen inspection.
+Windowed screenshots at 1152 × 648 were taken of every tutorial page, each level's start and finish, the Level 1 cue (before, fading in, full, fading out, gone), both upgrade popups before and after purchase, the Level 3 complete screen with no offer, the Prepare for Level 5 screen before and after buying speed, the pause screen, a survivor-lost failure, a timeout failure, the final screen and a restarted Level 1, with 1, 2, 4, 5 and 6 hearts on screen. They found and led to fixes for three real problems: the cue overlapped the GO! flash; a bought upgrade card showed the next step's numbers (for example "+18% to +36%"); and "1 of 1 survivors". The five captures in `screenshots/` (`briefing`, `gameplay`, `pause`, `debrief`, `upgrade`) were refreshed from this run.
+
+The Web export was built from a copy of the project with one extra test-only autoload that wins each level five seconds after it activates (it is not part of this project). In headless Chromium with software WebGL there were no console errors beyond the engine's start-up lines. The tutorial pages, the countdown, the Level 1 cue, the one-heart HUD, the Level 1 popup with `UPGRADE — 3 STARS` and its em dash, the purchase, Level 2 and the Level 3 complete screen with four hearts all rendered. The browser run stopped at the Level 3 screen (a scripted click missed the button), so Levels 4 and 5 and the Prepare for Level 5 screen were verified in the windowed Linux run only. The bundled UI font renders the em dash, and the tutorial still draws its arrows from an inline SVG because that font has no arrow glyphs.
 
 ## Remaining human playtests
 
-1. Give a new player the briefing and a fresh bank. Record the first three attempts with 0 upgrades. Collect delivery totals per boat, first loss time, unused time and where collisions delayed a pickup.
-2. Ask the player to compare nearby oxygen readings while steering around a rock, then dispatch to a distant visible contact. Check whether they understand fading contacts, the proximity ring, the assignment brackets and the cooldown.
-3. Compare two attempts using the same chart, one with the emergency boat and one without it. Ask why the player sent the boat or kept the three-star delivery. Record whether at least 13 people reach harbor and how much search time was spent finding the first urgent contact.
-4. Inspect oxygen numbers and red/yellow/green bars at the target display scale. Try simultaneous mouse aim, WASD and E on a physical keyboard. Replay after buying speed and check whether the handling change is perceptible.
-
-The reference pilot's foreknowledge leaves human search time, steering difficulty and perceived fairness unmeasured. Balancing should use observed player routes before changing the four-minute deadline. Native Windows editor/runtime testing is complete at the base viewport. Standalone executable export and additional display sizes remain unverified. Only Level 1 and the main speed shop are playable.
-
-## Tutorial (`feature/step-by-step-tutorial`)
-
-The single briefing page was replaced by a four-step tutorial (Your Mission, Find Survivors, Rescue & Deliver, Emergency Rescue) with Next and Back, a "Step n of 4" counter, four progress segments and Launch Rescue on the last page only. `tests/tutorial_suite.gd` checks each page's text, navigation limits, progress state, button set, layout fit at 1152 × 648, a frozen 4:00 timer and full oxygen tanks while it is open, stray E, Esc, right-click and movement input, a launch that happens exactly once, and pause, results, upgrade and replay after launching from the tutorial. Replay does not reopen it.
-
-Verified on Linux with the official Godot 4.7.2 build, not on the Windows machine used for the v0.2 numbers above:
-
-| Run | Result |
-| --- | --- |
-| `runtime_suite.gd`, unchanged | 109/109 |
-| `tutorial_suite.gd`, `--headless` (button signals stand in for mouse clicks) | 172/172 |
-| `tutorial_suite.gd`, windowed under Xvfb (real mouse click events) | 172/172 |
-| `balance_route.gd` | Identical to the table above |
-| Web export (single-threaded) in headless Chromium with software WebGL | Clicked through all four pages, Back and Next, stray keys, then Launch Rescue. The clock ran and survivors were revealed. |
-
-The bundled UI font has no arrow glyphs and Web builds have no system fonts, so `←` and `→` render as missing-glyph boxes there. The tutorial draws its arrows from an inline SVG and a test asserts every tutorial character exists in the bundled font. The existing speed-shop button still contains `→` and was not changed.
-
-Not verified: a Windows desktop run, Firefox or Safari, a GPU renderer, and display sizes other than 1152 × 648. `screenshots/briefing.png` still shows the old single-page briefing.
-
-## Level-start countdown (`feature/level-start-countdown`)
-
-Launch Rescue and Replay Level 1 now prepare the round, play a 3-second 3 → 2 → 1 countdown with a brief GO!, and only then activate gameplay. `GameManager` was split into `prepare_round()` (reset everything, boats at their berths, beam on the harbor, every gameplay system stopped) and `begin_round()` (switch boat controls, lighthouse aiming, emergency dispatch, the clock and oxygen on together); `start_round()` and `restart_round()` still do both, so the earlier suites are unchanged. The white boat follows a cubic Bézier path from above the top edge of the chart into its berth, driven by one delta-accumulated clock, so number, boat and overlay stay in step at any frame rate. The tutorial code was not touched.
-
-`tests/intro_suite.gd` (132 checks) covers: 3, 2, 1 order and roughly one second each; a large centred number with no backdrop; boat above the visible sea at t = 0, entering within the first second, moving only downward with no jumps or sharp bends, facing its direction of travel while moving, a seamless hand-off and an exact landing on the spawn; at least 20 px of water between the hull and every rock, the lighthouse island and the dock along the whole path; the beam on the harbor bearing for the entire countdown even with the mouse elsewhere, and normal mouse aiming afterwards; a 4:00 timer, full oxygen tanks, locked boats and lighthouse, an idle emergency boat and no round events until the end; E, Esc, right-click and held steering keys ignored during the live engine loop; activation of controls, aiming, dispatch, clock and oxygen together exactly at 3 s with normal speed, handling and collision values; identical timing at 30, 60 and 144 fps, uneven frame times and a single 5 s hitch; three consecutive replays that repeat the countdown, skip the tutorial, reset the beam and keep the star bank and upgrade; tutorial navigation unchanged. `tutorial_suite.gd` gained four checks because its launch and replay sections now wait for the countdown (176 checks).
-
-Verified on Linux with the official Godot 4.7.2 build:
-
-| Run | Result |
-| --- | --- |
-| `runtime_suite.gd`, unchanged | 109/109 |
-| `tutorial_suite.gd`, `--headless` | 176/176 |
-| `tutorial_suite.gd`, windowed under Xvfb (real mouse click events) | 176/176 |
-| `intro_suite.gd`, `--headless --fixed-fps 60` | 132/132 |
-| `intro_suite.gd`, `--headless` without `--fixed-fps` (two runs) | 132/132 each |
-| `intro_suite.gd`, windowed under Xvfb | 132/132 |
-| `balance_route.gd` | Output identical to the baseline commit |
-| Web export in headless Chromium with software WebGL | Clicked through the tutorial, Launch Rescue played the countdown over the scene, the boat reached its berth and the clock then ran (3:59 shortly after activation) |
-
-Mutation checks: the suite fails when the beam is not pointed at the harbor, when gameplay is not stopped during preparation, when the boat starts inside the visible area, when the path crosses a rock or the island or ends off the berth, when the countdown length or speed changes, when Replay skips the countdown or reopens the tutorial, when aiming is left enabled, and when the upgrade or star bank is reset.
-
-Not verified: a Windows desktop run, Firefox or Safari, a GPU renderer, and display sizes other than 1152 × 648.
-
-## Simplified HUD and survivor hearts (`feature/survivor-hearts-hud`)
-
-The top bar now keeps the title, Level 1, TIME, ABOARD, DELIVERED, LOST and STAR BANK, and the 15-survivor heart row sits between ABOARD and DELIVERED. The emergency-boat status line, MAIN SAVES, EMERGENCY SAVES and the numeric IN THE WATER readout are gone, together with their label references. The counters behind them (`main_delivered`, `emergency_delivered`, `active_count()`) and all emergency-boat logic are unchanged, and the results screen still lists both boats' deliveries. `SurvivorHeart` (`scripts/survivor_heart.gd`) draws one heart and reads its own `Survivor` every frame (`state`, `oxygen_remaining`, `oxygen_duration`, `survivor_id`); it keeps no oxygen state of its own. `Survivor` gained two constants, `WARNING_SECONDS = 55` and `CRITICAL_SECONDS = 30`, which the map label and the hearts now share. The one gameplay-text change: the "emergency boat unavailable" message no longer points at a status line that no longer exists.
-
-Note that these thresholds are absolute seconds, as on the map. Survivors 1, 2, 4, 6 and 10 have budgets of 34, 47, 60, 26 and 39 seconds, so their hearts start in warning or critical colours at full fill, and survivor 6 is red from the first second of play. A heart pulses only while its survivor's oxygen is really draining, so nothing pulses during the tutorial, the countdown or the pause screen.
-
-`tests/hud_suite.gd` (80 checks headless, 87 windowed) covers: the removed text and references; layout fit, overlap and gap checks at 1152 × 648; 15 hearts bound one-to-one to the existing survivors in ID order; full hearts and green at full oxygen; fill equal to oxygen_remaining / oxygen_duration from 100% to 0%; the 55 s and 30 s colour levels and smooth colour transitions; a calm pulse only for critical hearts; boarding on the main and emergency boats (secured treatment, frozen fill, scale-pulse animation, not counted as delivered); delivery through the real harbor interaction (filled, animation, stays visible); a real oxygen run-out (hollow, shake, settles dark red, stays in place); replay reset; the pause freeze; and, when windowed, sampled screen pixels for full, half-drained, aboard, delivered and lost hearts. Each section must run to its end or the suite fails. The existing runtime suite's HUD check was rewritten for the new bar and stays at 109 checks.
-
-Verified on Linux with the official Godot 4.7.2 build:
-
-| Run | Result |
-| --- | --- |
-| `runtime_suite.gd` | 109/109 |
-| `tutorial_suite.gd`, headless and windowed | 176/176 and 176/176 |
-| `intro_suite.gd`, headless and windowed | 132/132 and 132/132 |
-| `hud_suite.gd`, `--headless --fixed-fps 60` | 80/80 |
-| `hud_suite.gd`, `--headless` at the natural frame rate | 80/80 |
-| `hud_suite.gd`, windowed under Xvfb (pixel checks) | 87/87 |
-| `balance_route.gd` | Output identical to the baseline commit |
-| Web export in headless Chromium | The hearts drained and changed colour, and a lost survivor showed the broken-heart state with the ID digits rendered |
-
-Mutation checks: the suite fails when the fill is inverted, when boarding is shown as delivered, when every heart pulses, when the warning colour is removed, when a lost heart is deleted, when the pulse ignores pause, when transition animations are missing or survive a replay, when the heart order is reversed, when a removed label is re-added, when a lost heart keeps fill, and when the warning threshold changes.
-
-Not verified: a Windows desktop run, Firefox or Safari, a GPU renderer, and display sizes other than 1152 × 648. `screenshots/gameplay.png` still shows the old top bar.
+1. Give a new player the tutorial and a fresh bank. Record Level 1: how long they take to find the survivor, whether they notice the mouse cue, and whether 120 s of oxygen is generous or too long.
+2. Watch the first two or three attempts at Levels 4 and 5 without upgrades. Check whether the 18 to 24 s reserves the bot achieves are reachable for a human who must search first.
+3. Ask whether the choice on the Prepare for Level 5 screen is understood: speed +18% against one more seat, with only one affordable per campaign.
+4. Inspect oxygen numbers, hearts and the red, yellow and green states at the target display scale, with mouse aim, WASD and E on a physical keyboard.
+5. Run a Windows desktop session on the real GPU.
