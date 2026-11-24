@@ -74,6 +74,7 @@ func _boot(manual: bool) -> void:
 	main = scene.instantiate()
 	root.add_child(main)
 	await process_frame
+	main.call("_select_level", 1) # From the level map to the Level 1 briefing.
 	manager = main.get("manager") as RescueGameManager
 	boat = main.get("boat") as RescueBoat
 	lighthouse = main.get("lighthouse") as Lighthouse
@@ -82,6 +83,12 @@ func _boot(manual: bool) -> void:
 		_expect(false, "Main scene resolves the boat, manager, lighthouse and harbor")
 		main = null
 		return
+	# These checks cover the countdown sail-in that Levels 4-5 use. In Levels 1-3 the boat waits for
+	# the first mouse move instead; that flow has its own checks in progression_suite.gd.
+	# The suite also fails levels on the clock, so the (normally off) time limit is switched on.
+	for level in manager.levels:
+		level.boat_waits_for_mouse = false
+		level.time_limit_enabled = true
 	people.assign(manager.survivors)
 	round_starts = 0
 	manager.round_started.connect(func() -> void: round_starts += 1)
@@ -128,9 +135,10 @@ func _angle_gap(a: float, b: float) -> float:
 	return absf(wrapf(a - b, -PI, PI))
 
 
+## The HUD no longer shows the clock; this reads the hidden level clock in the same format.
 func _hud_clock() -> String:
-	main.call("_refresh_hud")
-	return ((main.get("_stat_labels") as Dictionary)["TIME"] as Label).text
+	var seconds := ceili(manager.time_remaining)
+	return "%d:%02d" % [floori(seconds / 60.0), seconds % 60]
 
 
 func _rect_distance(point: Vector2, rect: Rect2) -> float:
@@ -327,7 +335,7 @@ func _check_beam_toward_harbor() -> void:
 
 func _check_state_frozen_until_finish() -> void:
 	_launch_from_tutorial()
-	var stars := manager.stars
+	var stars := manager.points
 	var dt := 1.0 / 60.0
 	var all_frozen := true
 	var clock_text_ok := true
@@ -345,7 +353,7 @@ func _check_state_frozen_until_finish() -> void:
 			break
 		all_frozen = all_frozen and not manager.round_active and not boat.controls_enabled and not lighthouse.enabled \
 			and manager.result == RescueGameManager.Result.NONE and is_equal_approx(manager.time_remaining, 240.0) \
-			and manager.stars == stars and manager.delivered_count == 0 and manager.lost_count == 0
+			and manager.points == stars and manager.delivered_count == 0 and manager.lost_count == 0
 		clock_text_ok = clock_text_ok and _hud_clock() == "4:00"
 		for person in people:
 			oxygen_full = oxygen_full and is_equal_approx(person.oxygen_remaining, person.oxygen_duration)
@@ -512,30 +520,31 @@ func _check_replay() -> void:
 	var dt := 1.0 / 60.0
 	while _intro_active():
 		_step(dt)
-	# Win Level 1 by a real delivery, keep the three stars, and move on to Level 2.
-	boat.global_position = people[0].global_position
-	manager.try_interact()
-	boat.global_position = harbor.global_position
-	manager.try_interact()
-	_expect(manager.stars == 3 and manager.result == RescueGameManager.Result.VICTORY and main.get("_menu") != null,
-		"(setup) Level 1 was delivered: 3 stars banked and the completion screen is open")
-	# Test fixture: arrive at Level 2 already carrying upgrades, so the replays can prove they last.
-	manager.economy.capacity = 2
-	manager.economy.speed_level = 1
-	_find_button("ContinueButton").pressed.emit() # NOT NOW: keep the stars.
+	# Win Level 1 by real deliveries, keep the three stars, and move on to Level 2.
+	for person in people:
+		boat.global_position = person.global_position
+		manager.try_interact()
+		boat.global_position = harbor.global_position
+		manager.try_interact()
+	_expect(manager.points == 200 and manager.result == RescueGameManager.Result.VICTORY and main.get("_menu") != null,
+		"(setup) Level 1 was delivered: 200 Light Points banked and the completion screen is open")
+	# Test fixture: arrive at Level 2 already owning upgrades, so the replays can prove they last.
+	manager.economy.owned["capacity_1"] = true
+	manager.economy.owned["speed_1"] = true
+	_find_button("ContinueButton").pressed.emit()
 	while _intro_active():
 		_step(dt)
-	_expect(manager.level_number == 2 and manager.round_active and boat.capacity == 2 and manager.stars == 3,
-		"(setup) Level 2 is running with the carried capacity, speed and banked stars")
+	_expect(manager.level_number == 2 and manager.round_active and boat.capacity == 2 and manager.points == 200,
+		"(setup) Level 2 is running with the carried capacity, speed and banked points")
 	var upgraded_speed := boat.speed_multiplier
 	lighthouse.beam_angle = 2.5
 	manager._process(manager.time_remaining)
 	_expect(not manager.round_active and main.get("_menu") != null, "(setup) the round ended and the failure screen is open")
-	var bank := manager.stars
-	_expect(bank == 3, "(setup) the banked stars survive the failed attempt (%d)" % bank)
+	var bank := manager.points
+	_expect(bank == 200, "(setup) the banked points survive the failed attempt (%d)" % bank)
 	for round_number in range(1, 4):
 		var replay: Button = _find_button("ReplayButton")
-		_expect(replay != null and replay.text == "REPLAY LEVEL 2", "Replay #%d: the results screen offers Replay Level 2" % round_number)
+		_expect(replay != null and replay.text == "RETRY LEVEL 2", "Replay #%d: the results screen offers Retry Level 2" % round_number)
 		if replay == null:
 			return
 		var starts := round_starts
@@ -549,15 +558,15 @@ func _check_replay() -> void:
 		_expect(is_equal_approx(manager.time_remaining, 240.0) and manager.delivered_count == 0 and manager.lost_count == 0
 			and manager.result == RescueGameManager.Result.NONE and boat.passengers.is_empty(),
 			"Replay #%d: round state is reset as before (4:00, no deliveries)" % round_number)
-		_expect(manager.stars == bank and is_equal_approx(boat.speed_multiplier, upgraded_speed) and boat.capacity == 2,
+		_expect(manager.points == bank and is_equal_approx(boat.speed_multiplier, upgraded_speed) and boat.capacity == 2,
 			"Replay #%d: the star bank, speed and capacity persist" % round_number)
 		var oxygen_full := true
 		for person in manager.survivors:
 			oxygen_full = oxygen_full and is_equal_approx(person.oxygen_remaining, person.oxygen_duration) and person.state == Survivor.State.ACTIVE
-		_expect(oxygen_full and manager.survivors.size() == 2, "Replay #%d: both Level 2 survivors are fresh" % round_number)
+		_expect(oxygen_full and manager.survivors.size() == 3, "Replay #%d: all three Level 2 survivors are fresh" % round_number)
 		while _intro_active():
 			_step(dt)
-		_expect(manager.round_active and round_starts == starts + 1 and boat.global_position == manager.boat_spawn and manager.stars == bank,
+		_expect(manager.round_active and round_starts == starts + 1 and boat.global_position == manager.boat_spawn and manager.points == bank,
 			"Replay #%d: gameplay begins once, with the boat on its spawn and no stars lost" % round_number)
 		if round_number < 3:
 			lighthouse.beam_angle = -1.0
@@ -569,16 +578,13 @@ func _check_tutorial_not_modified() -> void:
 	## The countdown must leave the tutorial exactly as it was: content, navigation, start state.
 	_expect(main.get("_tutorial_open") == true and main.get("_tutorial_step") == 0 and not _intro_active() and not manager.round_active,
 		"At startup the tutorial (step 1) is shown, with no countdown and no round")
-	_expect(_find_button("TutorialBack") == null and _find_button("TutorialNext") != null, "Step 1: Back is absent, Next is offered")
-	for step in range(1, 4):
-		main.call("_tutorial_next")
-		_expect(main.get("_tutorial_step") == step and not _intro_active(), "Next moves to step %d without any countdown" % (step + 1))
+	_expect(_find_button("TutorialBack") == null and _find_button("TutorialNext") == null, "The one-page briefing has no Back or Next")
 	var launch := _find_button("TutorialLaunch")
-	_expect(launch != null and launch.text == "Launch Rescue" and _find_button("TutorialNext") == null, "Only step 4 offers Launch Rescue")
-	main.call("_tutorial_back")
-	_expect(main.get("_tutorial_step") == 2 and _find_button("TutorialLaunch") == null and _find_button("TutorialNext") != null,
-		"Back returns to step 3, where Launch Rescue is gone again")
+	_expect(launch != null and launch.text == "Launch Rescue", "The briefing offers Launch Rescue")
 	main.call("_tutorial_next")
+	main.call("_tutorial_back")
+	_expect(main.get("_tutorial_step") == 0 and _find_button("TutorialLaunch") != null and not _intro_active(),
+		"Stray Next/Back calls leave the briefing as it is, with no countdown")
 	_expect(not manager.round_active and not _intro_active(), "No countdown or gameplay while the tutorial is still open")
 
 

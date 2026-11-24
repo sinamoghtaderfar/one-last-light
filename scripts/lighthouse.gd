@@ -6,8 +6,23 @@ extends Node2D
 @export var beam_length: float = 660.0
 @export var beam_width: float = 0.48
 
+## Shop upgrades: each light level adds this much length and cone width to the authored beam.
+@export var length_per_level: float = 110.0
+@export var width_per_level: float = 0.10
+
 var beam_angle: float = -PI
 var enabled: bool = true
+var _base_length: float = -1.0
+var _base_width: float = -1.0
+
+
+func apply_light_level(light_level: int) -> void:
+	if _base_length < 0.0:
+		_base_length = beam_length
+		_base_width = beam_width
+	beam_length = _base_length + length_per_level * maxi(light_level, 0)
+	beam_width = _base_width + width_per_level * maxi(light_level, 0)
+	queue_redraw()
 
 
 func _process(delta: float) -> void:

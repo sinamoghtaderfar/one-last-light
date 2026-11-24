@@ -1,44 +1,43 @@
-[gd_resource type="Resource" script_class="LevelDefinition" load_steps=10 format=3]
+[gd_resource type="Resource" script_class="LevelDefinition" load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/level_definition.gd" id="1_level"]
 [ext_resource type="Script" path="res://scripts/survivor_spec.gd" id="2_spec"]
-[ext_resource type="Script" path="res://scripts/upgrade_offer.gd" id="3_offer"]
 
 [sub_resource type="Resource" id="Resource_s1"]
 script = ExtResource("2_spec")
 survivor_id = 1
 position = Vector2(850, 500)
-oxygen_seconds = 30
+oxygen_seconds = 35
 
 [sub_resource type="Resource" id="Resource_s2"]
 script = ExtResource("2_spec")
 survivor_id = 2
 position = Vector2(660, 190)
-oxygen_seconds = 45
+oxygen_seconds = 55
 
 [sub_resource type="Resource" id="Resource_s3"]
 script = ExtResource("2_spec")
 survivor_id = 3
 position = Vector2(330, 200)
-oxygen_seconds = 65
+oxygen_seconds = 80
 
 [sub_resource type="Resource" id="Resource_s4"]
 script = ExtResource("2_spec")
 survivor_id = 4
 position = Vector2(130, 400)
-oxygen_seconds = 140
+oxygen_seconds = 170
 
 [sub_resource type="Resource" id="Resource_s5"]
 script = ExtResource("2_spec")
 survivor_id = 5
 position = Vector2(420, 500)
-oxygen_seconds = 85
+oxygen_seconds = 100
 
 [sub_resource type="Resource" id="Resource_s6"]
 script = ExtResource("2_spec")
 survivor_id = 6
 position = Vector2(180, 170)
-oxygen_seconds = 115
+oxygen_seconds = 140
 
 [resource]
 script = ExtResource("1_level")
@@ -46,8 +45,6 @@ level_number = 5
 title = "Last Light"
 survivors = Array[ExtResource("2_spec")]([SubResource("Resource_s1"), SubResource("Resource_s2"), SubResource("Resource_s3"), SubResource("Resource_s4"), SubResource("Resource_s5"), SubResource("Resource_s6")])
 time_limit = 240
-allowed_losses = 0
+allowed_losses = 2
 show_mouse_cue = false
-offer_screen = 0
-upgrade_offers = Array[ExtResource("3_offer")]([])
-offers_exclusive = false
+first_sighting_message = "Careful! If three people drown, the game is lost."

@@ -1,52 +1,37 @@
-[gd_resource type="Resource" script_class="LevelDefinition" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="LevelDefinition" load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/level_definition.gd" id="1_level"]
 [ext_resource type="Script" path="res://scripts/survivor_spec.gd" id="2_spec"]
-[ext_resource type="Script" path="res://scripts/upgrade_offer.gd" id="3_offer"]
 
 [sub_resource type="Resource" id="Resource_s1"]
 script = ExtResource("2_spec")
 survivor_id = 1
 position = Vector2(900, 200)
-oxygen_seconds = 25
+oxygen_seconds = 30
 
 [sub_resource type="Resource" id="Resource_s2"]
 script = ExtResource("2_spec")
 survivor_id = 2
 position = Vector2(720, 500)
-oxygen_seconds = 35
+oxygen_seconds = 40
 
 [sub_resource type="Resource" id="Resource_s3"]
 script = ExtResource("2_spec")
 survivor_id = 3
 position = Vector2(480, 240)
-oxygen_seconds = 55
+oxygen_seconds = 65
 
 [sub_resource type="Resource" id="Resource_s4"]
 script = ExtResource("2_spec")
 survivor_id = 4
 position = Vector2(150, 300)
-oxygen_seconds = 100
+oxygen_seconds = 120
 
 [sub_resource type="Resource" id="Resource_s5"]
 script = ExtResource("2_spec")
 survivor_id = 5
 position = Vector2(420, 500)
-oxygen_seconds = 75
-
-[sub_resource type="Resource" id="Resource_o_l4_speed"]
-script = ExtResource("3_offer")
-id = &"l4_speed"
-kind = 1
-cost = 9
-amount = 1
-
-[sub_resource type="Resource" id="Resource_o_l4_capacity"]
-script = ExtResource("3_offer")
-id = &"l4_capacity"
-kind = 0
-cost = 9
-amount = 1
+oxygen_seconds = 90
 
 [resource]
 script = ExtResource("1_level")
@@ -54,8 +39,5 @@ level_number = 4
 title = "Rocky Waters"
 survivors = Array[ExtResource("2_spec")]([SubResource("Resource_s1"), SubResource("Resource_s2"), SubResource("Resource_s3"), SubResource("Resource_s4"), SubResource("Resource_s5")])
 time_limit = 240
-allowed_losses = 0
+allowed_losses = 1
 show_mouse_cue = false
-offer_screen = 2
-upgrade_offers = Array[ExtResource("3_offer")]([SubResource("Resource_o_l4_speed"), SubResource("Resource_o_l4_capacity")])
-offers_exclusive = true

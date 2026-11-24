@@ -46,14 +46,17 @@ func leg(a: Vector2, b: Vector2, a_is_survivor: bool, b_is_survivor: bool) -> fl
 
 ## people: Array of {id, position, oxygen}. Returns the plan with the largest minimum reserve:
 ## {trips: Array[Array[int]], pickup_times: {id: seconds}, reserves: {id: seconds}, min_reserve, total_time}.
-func best_plan(people: Array, capacity: int, speed: float, search_delay: float = 0.0) -> Dictionary:
+## by_ratio: maximise the smallest share of air left at pickup (the three-star rule: nobody picked
+## up after their air turned red at 25%) instead of the smallest number of seconds left.
+func best_plan(people: Array, capacity: int, speed: float, search_delay: float = 0.0, by_ratio: bool = false) -> Dictionary:
 	var best: Dictionary = {}
+	var key := "min_ratio" if by_ratio else "min_reserve"
 	for order in _permutations(people.size()):
 		for cut_mask in range(1 << maxi(people.size() - 1, 0)):
 			var plan := _replay(people, order, cut_mask, capacity, speed, search_delay)
 			if plan.is_empty():
 				continue
-			if best.is_empty() or plan["min_reserve"] > best["min_reserve"]:
+			if best.is_empty() or plan[key] > best[key]:
 				best = plan
 	return best
 
@@ -71,6 +74,7 @@ func _replay(people: Array, order: Array, cut_mask: int, capacity: int, speed: f
 	var pickups: Dictionary = {}
 	var reserves: Dictionary = {}
 	var min_reserve := INF
+	var min_ratio := INF
 	var ids: Array = []
 	for trip in trips:
 		var here := harbor_gate
@@ -82,12 +86,13 @@ func _replay(people: Array, order: Array, cut_mask: int, capacity: int, speed: f
 			pickups[person["id"]] = clock
 			reserves[person["id"]] = person["oxygen"] - clock
 			min_reserve = minf(min_reserve, reserves[person["id"]])
+			min_ratio = minf(min_ratio, reserves[person["id"]] / maxf(person["oxygen"], 0.01))
 			here = person["position"]
 			here_is_survivor = true
 			trip_ids.append(person["id"])
 		clock += leg(here, harbor_gate, here_is_survivor, false) * TURN_FACTOR / speed + TRIP_OVERHEAD
 		ids.append(trip_ids)
-	return {"trips": ids, "pickup_times": pickups, "reserves": reserves, "min_reserve": min_reserve, "total_time": clock}
+	return {"trips": ids, "pickup_times": pickups, "reserves": reserves, "min_reserve": min_reserve, "min_ratio": min_ratio, "total_time": clock}
 
 
 func _permutations(count: int) -> Array:
