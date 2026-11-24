@@ -6,14 +6,15 @@ extends SceneTree
 ## player can actually reach is played, including the ones that skip every purchase.
 
 const KEYS := ["move_left", "move_right", "move_up", "move_down"]
-## Upgrade states reachable through the campaign: [capacity, speed level, how the player got there].
+const LAYOUT_SEEDS := [11, 22, 33, 44, 55]
+## Upgrade states reachable through the campaign's shop: [capacity, speed level, how the player got there].
+## Nothing can be bought before Level 4 (Extra Seat), and Faster Engine unlocks for Level 5.
 const CONFIGS := {
 	1: [[1, 0, "no upgrades"]],
-	2: [[1, 0, "skipped the Level 1 upgrade"], [2, 0, "bought the Level 1 upgrade"]],
-	3: [[1, 0, "no upgrades"], [2, 0, "one capacity upgrade"], [3, 0, "both capacity upgrades"]],
-	4: [[1, 0, "no upgrades"], [2, 0, "one capacity upgrade"], [3, 0, "both capacity upgrades"]],
-	5: [[1, 0, "no upgrades"], [1, 1, "speed only"], [2, 0, "one capacity upgrade"], [3, 0, "two capacity upgrades, skipped the Level 5 offer"],
-		[3, 1, "two capacity upgrades and speed"], [4, 0, "all three capacity upgrades"]],
+	2: [[1, 0, "no upgrades"]],
+	3: [[1, 0, "no upgrades"]],
+	4: [[1, 0, "no upgrades"], [2, 0, "bought Extra Seat"]],
+	5: [[1, 0, "no upgrades"], [1, 1, "Faster Engine only"], [2, 0, "Extra Seat only"], [2, 1, "Extra Seat and Faster Engine"]],
 }
 ## Planner assumptions that a person cannot beat: a pause to read the timers before every trip.
 const DECISION_SECONDS := 3.0
@@ -23,6 +24,10 @@ const ROUTE_MARGIN := 10.0
 ## How long the bot keeps one key combination pressed before choosing again (a third of a second).
 const HOLD_FRAMES := 20
 const ROUTE_STEP_RADIUS := 10.0
+## In Levels 1-3 the boat only arrives after the player's first mouse move (assumed to take 1 s), the
+## level's delay and the 3 s sail-in. Oxygen already runs during that time.
+const MOUSE_SECONDS := 1.0
+const SAIL_IN_SECONDS := 3.0
 ## Oxygen rules the level files were derived from (see TESTING.md). A level may not fall below them.
 const MIN_FIRST_LEVEL_OXYGEN := 120.0
 
@@ -64,15 +69,20 @@ func _run() -> void:
 	for level_index in range(manager.levels.size()):
 		if only != 0 and level_index + 1 != only:
 			continue
+		# Layouts are random for every attempt: the starting boat plays several seeded layouts, every
+		# upgrade state at least one.
+		for layout_seed in LAYOUT_SEEDS:
+			await _play(level_index, 1, 0, "no upgrades", layout_seed)
 		for config in CONFIGS[level_index + 1]:
-			await _play(level_index, config[0], config[1], config[2])
+			if config[0] != 1 or config[1] != 0:
+				await _play(level_index, config[0], config[1], config[2], LAYOUT_SEEDS[0])
 	_finish()
 
 
 ## Geometry and rules every level must satisfy before any bot plays it.
 func _check_level_data() -> void:
 	_expect(manager.levels.size() == 5, "The campaign has exactly five levels")
-	var expected_counts := [1, 2, 4, 5, 6]
+	var expected_counts := [2, 3, 4, 5, 6]
 	for index in range(manager.levels.size()):
 		var level := manager.levels[index]
 		var label := "Level %d" % level.level_number
@@ -108,18 +118,24 @@ func _check_level_data() -> void:
 	_expect(manager.economy.starting_capacity == 1 and boat.initial_capacity == 1, "The boat and the economy both start with capacity 1")
 
 
-func _play(level_index: int, capacity: int, speed_level: int, label: String) -> void:
+func _play(level_index: int, capacity: int, speed_level: int, label: String, layout_seed: int) -> void:
 	var level := manager.levels[level_index]
 	manager.economy.reset_campaign()
-	manager.economy.capacity = capacity # Test fixture: the upgrade state the player reached.
-	manager.economy.speed_level = speed_level
+	# Test fixture: the upgrade state the player reached, granted without spending points.
+	if capacity >= 2:
+		manager.economy.owned["capacity_1"] = true
+	if speed_level >= 1:
+		manager.economy.owned["speed_1"] = true
 	manager.load_level(level_index)
+	manager.layout.rng.seed = layout_seed
 	people.clear()
 	for person in manager.survivors:
 		people[person.survivor_id] = person
 		person.picked_up.connect(_record_pickup)
 	tightest_reserve = INF
 	bot_failed = false
+	for person in manager.survivors:
+		person.turned_critical.connect(func(p: Survivor) -> void: print("  RED ZONE: survivor %d at %.1fs elapsed (picked up later)" % [p.survivor_id, manager.elapsed_time]))
 	manager.start_round()
 	# Supply a deterministic beam bearing in headless mode. The manager still runs its usual
 	# cone, memory and proximity detection every frame.
@@ -127,13 +143,19 @@ func _play(level_index: int, capacity: int, speed_level: int, label: String) -> 
 	var speed := boat.base_speed * boat.speed_multiplier
 	var list: Array = []
 	for spec in level.survivors:
-		list.append({"id": spec.survivor_id, "position": spec.position, "oxygen": spec.oxygen_seconds})
-	var plan := planner.best_plan(list, capacity, speed, 0.0)
-	var description := "Level %d, capacity %d, speed %+d%% (%s)" % [level.level_number, capacity, roundi(speed_level * boat.speed_bonus_per_level * 100), label]
+		pass
+	for person in manager.survivors: # This attempt's random layout.
+		list.append({"id": person.survivor_id, "position": person.position, "oxygen": person.oxygen_duration})
+	var wait := MOUSE_SECONDS + level.boat_delay_after_mouse + SAIL_IN_SECONDS if level.boat_waits_for_mouse else 0.0
+	# The bot plays for three stars: the order that keeps everyone furthest from the red zone.
+	var plan := planner.best_plan(list, capacity, speed, wait, true)
+	var description := "Level %d, capacity %d, speed %+d%% (%s), layout %d" % [level.level_number, capacity, roundi(speed_level * boat.speed_bonus_per_level * 100), label, layout_seed]
 	_expect(boat.capacity == capacity, "%s: the boat starts the level with the carried-over capacity" % description)
 	_expect(not plan.is_empty() and plan["min_reserve"] > 0.0, "%s: the planner finds a rescue order that beats every oxygen budget" % description)
 	if plan.is_empty():
 		return
+	if wait > 0.0:
+		await _wait_seconds(wait) # The boat is not there yet; the oxygen is already running.
 	for trip in plan["trips"]:
 		if not manager.round_active or bot_failed:
 			break
@@ -146,7 +168,9 @@ func _play(level_index: int, capacity: int, speed_level: int, label: String) -> 
 		"%s: the bot delivers every survivor" % description)
 	_expect(manager.elapsed_time < level.time_limit * 0.6, "%s: and finishes with at least 40%% of the clock to spare (%.0f s used)" % [description, manager.elapsed_time])
 	_expect(tightest_reserve >= 8.0, "%s: no survivor is picked up with under 8 s of oxygen left (tightest %.1f s)" % [description, tightest_reserve])
-	_expect(manager.level_stars == delivered * manager.stars_per_survivor, "%s: stars match deliveries" % description)
+	_expect(manager.level_stars >= 2, "%s: nobody drowned, so the rating is at least two stars (%d)" % [description, manager.level_stars])
+	_expect(manager.level_stars == 3, "%s: careful play earns all three stars (nobody reached the red zone)" % description)
+	print("RATING %s: %d stars (planned smallest air share at pickup %.0f%%)" % [description, manager.level_stars, plan["min_ratio"] * 100.0])
 
 
 func _trip(ids: Array) -> void:

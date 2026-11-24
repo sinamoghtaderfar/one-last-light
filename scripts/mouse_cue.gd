@@ -20,6 +20,10 @@ const SUBTITLE := "Aim the lighthouse beam to find the survivor."
 
 var elapsed: float = 0.0
 var playing: bool = false
+## While true, the cue holds at full opacity instead of fading out after visible_seconds.
+var hold: bool = false
+## Drives the mouse pictogram's sway, which keeps moving while the cue is held.
+var anim_time: float = 0.0
 
 
 func _ready() -> void:
@@ -30,8 +34,10 @@ func _ready() -> void:
 
 
 ## Starts (or restarts) the three seconds. Called once per level start, after gameplay activates.
-func play() -> void:
+func play(hold_until_dismissed: bool = false) -> void:
 	elapsed = -start_delay
+	anim_time = 0.0
+	hold = hold_until_dismissed
 	playing = true
 	modulate.a = 0.0
 	show()
@@ -39,7 +45,16 @@ func play() -> void:
 	queue_redraw()
 
 
+## Lets a held cue fade out now (or as soon as it has faded in).
+func dismiss() -> void:
+	if not playing or not hold:
+		return
+	hold = false
+	elapsed = maxf(elapsed, visible_seconds - fade_out_seconds)
+
+
 func stop() -> void:
+	hold = false
 	playing = false
 	elapsed = 0.0
 	hide()
@@ -50,6 +65,9 @@ func _process(delta: float) -> void:
 	if not playing:
 		return
 	elapsed += delta
+	anim_time += delta
+	if hold:
+		elapsed = minf(elapsed, visible_seconds - fade_out_seconds)
 	if elapsed >= visible_seconds:
 		stop()
 		return
@@ -82,7 +100,7 @@ func _draw() -> void:
 	panel.set_corner_radius_all(10)
 	draw_style_box(panel, box)
 	# Mouse pictogram, swaying left and right between two arrows.
-	var sway := sin(elapsed * 4.2) * 11.0
+	var sway := sin(anim_time * 4.2) * 11.0
 	var center := Vector2(sway, box.position.y + 34.0)
 	var body := StyleBoxFlat.new()
 	body.bg_color = Color(0.89, 0.93, 0.91, 0.12)
@@ -93,7 +111,7 @@ func _draw() -> void:
 	draw_line(center + Vector2(0, -15), center + Vector2(0, -3), TEXT_COLOR, 1.5, true)
 	draw_line(center + Vector2(-10, -3), center + Vector2(10, -3), TEXT_COLOR, 1.5, true)
 	draw_circle(center + Vector2(0, -9), 1.6, TEAL_COLOR)
-	var pulse := 0.55 + 0.45 * sin(elapsed * 4.2 + PI * 0.5)
+	var pulse := 0.55 + 0.45 * sin(anim_time * 4.2 + PI * 0.5)
 	for side in [-1.0, 1.0]:
 		var tip := Vector2(side * 44.0, center.y)
 		var color := Color(TEAL_COLOR, 0.35 + 0.65 * (pulse if side > 0.0 else 1.0 - pulse))

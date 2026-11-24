@@ -57,7 +57,7 @@ func _refresh_people() -> void:
 ## Fixture: load a level with the boat carrying the given capacity, and start it at once.
 func _start_level(level_number: int, capacity: int = 1) -> void:
 	manager.economy.reset_campaign()
-	manager.economy.capacity = capacity # (setup) the upgrade state the player arrived with
+	manager.economy.starting_capacity = capacity # (fixture) seats the boat arrives with, without buying them
 	manager.load_level(level_number - 1)
 	_refresh_people()
 	manager.start_round()
@@ -68,7 +68,7 @@ func _check_level() -> void:
 		"Project main scene is configured")
 	_expect(ProjectSettings.get_setting("rendering/renderer/rendering_method") == "gl_compatibility",
 		"Compatibility renderer is configured")
-	_expect(people.size() == 1 and manager.level_number == 1 and manager.survivors_total == 1, "The game starts on Level 1 with a single survivor")
+	_expect(people.size() == 2 and manager.level_number == 1 and manager.survivors_total == 2, "The game starts on Level 1 with two survivors")
 	var ids := {}
 	var positions := {}
 	for person in people:
@@ -84,11 +84,14 @@ func _check_level() -> void:
 	_expect(manager.round_active and boat.controls_enabled and lighthouse.enabled, "Launch activates the round")
 	_expect(boat.capacity == 1 and boat.passengers.is_empty(), "The boat begins with one empty seat")
 	_expect(harbor.contains_point(boat.global_position), "The boat starts at the safe harbor")
-	_expect(is_equal_approx(manager.level.time_limit, 240.0) and is_equal_approx(manager.time_remaining, 240.0),
-		"Level 1 has a four-minute deadline")
+	var no_clock := true
+	for level in manager.levels:
+		no_clock = no_clock and not level.time_limit_enabled
+	_expect(no_clock, "No level has a time limit: oxygen is the only pressure")
 	_expect(main.find_child("EmergencyBoat", true, false) == null, "There is no emergency boat in the scene")
-	var first_offer := manager.level.upgrade_offers[0]
-	_expect(not manager.purchase_offer(first_offer.id), "Upgrades cannot be bought during a round")
+	manager.economy.points = 1000
+	_expect(not manager.buy("capacity_1") and not manager.economy.owned.has("capacity_1"), "Nothing can be bought during a round")
+	manager.economy.points = 0
 
 
 func _check_movement() -> void:
@@ -170,7 +173,7 @@ func _check_single_seat_rescue() -> void:
 	initial_oxygen = first.oxygen_remaining
 	first._process(20.0)
 	_expect(is_equal_approx(initial_oxygen, first.oxygen_remaining), "Oxygen stops on the boat")
-	_expect(manager.delivered_count == 0 and manager.stars == 0, "Pickup alone gives no successful rescue or currency")
+	_expect(manager.delivered_count == 0 and manager.points == 0, "Pickup alone gives no successful rescue or currency")
 	boat.global_position = second.global_position
 	_key(KEY_E)
 	_expect(boat.passengers.size() == 1 and second.state == Survivor.State.ACTIVE, "Capacity 1 prevents a second passenger")
@@ -179,9 +182,9 @@ func _check_single_seat_rescue() -> void:
 	_key(KEY_E)
 	_expect(boat.passengers.is_empty() and manager.delivered_count == 1 and first.state == Survivor.State.DELIVERED,
 		"Harbor E unloads the seat and credits the rescue")
-	_expect(manager.stars == 3 and manager.stars_per_survivor == 3, "Each delivery earns three stars")
+	_expect(manager.points == 0, "Points come only from the level rating at the end, not from single deliveries")
 	_key(KEY_E)
-	_expect(manager.delivered_count == 1 and manager.stars == 3, "Empty unload cannot duplicate rewards")
+	_expect(manager.delivered_count == 1, "Empty unload cannot duplicate a delivery")
 
 
 func _check_multi_seat_rescue() -> void:
@@ -202,10 +205,8 @@ func _check_multi_seat_rescue() -> void:
 	_expect(boat.passengers.size() == 2 and three.state == Survivor.State.ACTIVE, "Capacity 2 prevents a third passenger")
 	boat.global_position = harbor.global_position
 	_key(KEY_E)
-	_expect(boat.passengers.is_empty() and manager.delivered_count == 2 and manager.stars == 6,
-		"Harbor E unloads both seats and credits both rescues (6 stars)")
-	_expect(manager.economy.stars == 0 and manager.economy.pending_stars == 6,
-		"Stars of an unfinished level stay pending until the level is won")
+	_expect(boat.passengers.is_empty() and manager.delivered_count == 2 and manager.points == 0,
+		"Harbor E unloads both seats and credits both rescues (no points until the level is won)")
 
 
 func _check_pause() -> void:
@@ -241,17 +242,28 @@ func _check_failures_and_retry() -> void:
 	_lose(first)
 	_expect(first.state == Survivor.State.LOST and manager.lost_count == 1, "Oxygen exhaustion signals one loss")
 	_expect(not first.pick_up(), "Lost survivors reject pickup")
-	_expect(not manager.round_active and manager.result == RescueGameManager.Result.SURVIVOR_LOST,
-		"A single loss makes the level impossible, so it fails immediately")
-	_expect(_menu_contains("LEVEL 3 FAILED") and _menu_contains("Survivor 01 was lost"), "The failure screen names the level and the lost survivor")
+	_expect(manager.round_active and manager.result == RescueGameManager.Result.NONE and main.call("lives_left") == 1,
+		"Level 3 has two lives: the first loss costs one life and the level goes on")
+	_expect((main.get("_heart_break") as HeartBreak).is_playing() and paused and main.get("_menu") == null,
+		"The heart-break plays over a frozen game, with no menu")
+	(main.get("_heart_break") as HeartBreak).finish()
+	_expect(not paused and manager.round_active, "After the heart-break the game runs again")
+	_lose(people[1])
+	_expect(not manager.round_active and manager.result == RescueGameManager.Result.SURVIVOR_LOST and main.call("lives_left") == 0,
+		"The second loss in Level 3 ends the level")
+	_expect(main.get("_menu") == null and (main.get("_heart_break") as HeartBreak).is_playing(), "The failure screen waits for the heart-break")
+	(main.get("_heart_break") as HeartBreak).finish()
+	_expect(_menu_contains("GAME LOST") and _menu_contains("Two survivors drowned"), "Then the failure screen names the level and the losses")
 	_expect(not boat.controls_enabled and not lighthouse.enabled, "Failure disables steering and lighthouse control")
-	var oxygen := people[1].oxygen_remaining
+	var oxygen := people[2].oxygen_remaining
 	var remaining := manager.time_remaining
 	await _physics_frames(4)
-	_expect(is_equal_approx(oxygen, people[1].oxygen_remaining) and is_equal_approx(remaining, manager.time_remaining),
+	_expect(is_equal_approx(oxygen, people[2].oxygen_remaining) and is_equal_approx(remaining, manager.time_remaining),
 		"Results freeze the unresolved contacts and the level clock")
 
-	# A timeout with a living passenger aboard is a failure: aboard is not delivered.
+	# A timeout with a living passenger aboard is a failure: aboard is not delivered. Levels ship
+	# without a time limit; the rule is still there for designers, so switch it on for this check.
+	manager.level.time_limit_enabled = true
 	manager.replay_level()
 	manager.begin_round()
 	boat.global_position = people[0].global_position
@@ -261,7 +273,8 @@ func _check_failures_and_retry() -> void:
 	_expect(not manager.round_active and manager.time_remaining == 0.0 and manager.result == RescueGameManager.Result.TIME_RAN_OUT,
 		"Countdown expiry is a distinct failure even with a living passenger aboard")
 	_expect(_menu_contains("Time ran out"), "Timeout screen explains the deadline")
-	_expect(manager.delivered_count == 0 and manager.economy.stars == 0 and manager.economy.pending_stars == 0, "A failed level banks nothing")
+	_expect(manager.delivered_count == 0 and manager.points == 0 and manager.economy.best_stars.is_empty(), "A failed level earns nothing")
+	manager.level.time_limit_enabled = false
 	manager.replay_level()
 	manager.begin_round()
 	_expect(manager.round_active and manager.level_number == 3 and manager.result == RescueGameManager.Result.NONE and manager.time_remaining == manager.level.time_limit,
@@ -286,14 +299,14 @@ func _check_victory_rules() -> void:
 	_key(KEY_E)
 	_expect(manager.result == RescueGameManager.Result.VICTORY and manager.delivered_count == 4 and manager.lost_count == 0,
 		"Delivering the last passenger wins the level")
-	_expect(manager.level_stars == 12 and manager.economy.stars == 12 and manager.economy.pending_stars == 0 and manager.economy.total_stars_earned == 12,
-		"Victory banks the level's 12 stars once")
-	_expect(_menu_contains("LEVEL 3 COMPLETE") and _menu_contains("You earned 12 stars!"), "Victory screen identifies the outcome and the stars")
+	_expect(manager.level_stars == 3 and manager.level_points == 200 and manager.points == 200 and manager.economy.total_points_earned == 200,
+		"A perfect win is rated three stars and pays 200 Light Points once")
+	_expect(_menu_contains("LEVEL 3 COMPLETE") and _menu_contains("+200 Light Points"), "Victory screen identifies the outcome and the points")
 	var rounds_ended := [0]
 	manager.round_ended.connect(func() -> void: rounds_ended[0] += 1)
 	_key(KEY_E)
 	manager._process(1.0)
-	_expect(rounds_ended[0] == 0 and manager.economy.stars == 12, "A finished level cannot end or pay twice")
+	_expect(rounds_ended[0] == 0 and manager.points == 200, "A finished level cannot end or pay twice")
 
 
 func _check_hud() -> void:
@@ -305,22 +318,17 @@ func _check_hud() -> void:
 	boat.global_position = harbor.global_position
 	_key(KEY_E)
 	main.call("_refresh_hud")
-	var stats: Dictionary = main.get("_stat_labels")
-	var seconds := ceili(manager.time_remaining)
-	var expected := {"ABOARD": "0/2", "DELIVERED": "2/4", "LOST": "0",
-		"STAR BANK": "6", "TIME": "%d:%02d" % [floori(seconds / 60.0), seconds % 60]}
-	for caption in expected:
-		_expect(stats.has(caption) and stats[caption].text == expected[caption], "HUD %s shows %s" % [caption, expected[caption]])
-	_expect(stats.size() == expected.size(), "The top HUD keeps exactly TIME, ABOARD, DELIVERED, LOST and STAR BANK as numeric readouts")
+	var seats := main.get("_seats") as SeatDisplay
+	var progress := main.get("_progress") as RescueProgress
+	var points := main.get("_points_badge") as PointsBadge
+	_expect(seats.capacity == 2 and seats.passengers == 0, "HUD seats: two empty seats after unloading")
+	_expect(progress.total == 4 and progress.delivered == 2 and progress.lost == 0 and is_equal_approx(progress.saved_ratio(), 0.5),
+		"HUD progress bar: 2 of 4 saved, half full")
+	_expect(points.points == 0, "HUD Light Points: nothing yet in an unfinished level")
 	var level_label := main.get("_round_label") as Label
-	_expect(level_label != null and level_label.text == "LEVEL 3 / 5", "HUD identifies Level 3 of 5")
+	_expect(level_label != null and level_label.text == "LEVEL 3", "HUD identifies Level 3")
 	var hearts: Array = main.get("_hearts")
-	var in_water := 0
-	for heart: SurvivorHeart in hearts:
-		heart.advance(0.0)
-		if heart.shown_state == Survivor.State.ACTIVE:
-			in_water += 1
-	_expect(hearts.size() == 4 and in_water == 2 and manager.active_count() == 2, "The heart row shows 4 hearts, 2 of them still in the water")
+	_expect(hearts.size() == 2 and hearts[0].visible and hearts[1].visible, "Level 3 shows two lives, both still there")
 
 
 func _menu_contains(fragment: String) -> bool:

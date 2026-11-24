@@ -1,7 +1,7 @@
 extends SceneTree
 ## godot --headless --fixed-fps 60 --path . --script res://tests/tutorial_suite.gd
-## Covers the four-step pre-launch tutorial: content, Next/Back navigation, progress indicator,
-## layout fit, the frozen game state while it is open, input isolation, the one-time launch,
+## Covers the one-page pre-launch briefing: content, the single Launch Rescue button, layout fit,
+## the frozen game state while it is open, input isolation, the one-time launch,
 ## and the hand-off to pause, results, upgrades and replay.
 
 const VIEWPORT := Rect2(0, 0, 1152, 648)
@@ -10,33 +10,9 @@ const SPEC := [
 	{
 		"title": "Your Mission",
 		"lines": [
-			"Rescue every survivor across 5 levels, one level at a time.",
-			"Deliver them all to the harbor before the 4-minute timer runs out.",
-			"If a survivor runs out of oxygen, the level fails. You can replay it right away.",
-		],
-	},
-	{
-		"title": "Find Survivors",
-		"lines": [
-			"Move your mouse to aim the lighthouse beam.",
-			"The light reveals survivors and their remaining oxygen.",
-			"Contacts disappear 3 seconds after leaving the light, unless your boat is close enough to detect them.",
-		],
-	},
-	{
-		"title": "Rescue & Deliver",
-		"lines": [
-			"Use WASD or the arrow keys to steer your rescue boat.",
-			"Press E near a survivor to pick them up, even if they are not currently visible.",
-			"Your boat starts with room for 1 survivor. Return to the harbor and press E to deliver.",
-		],
-	},
-	{
-		"title": "Earn Stars & Upgrade",
-		"lines": [
-			"Each survivor you deliver earns 3 stars.",
-			"Between levels, spend stars to carry more survivors or sail faster. Upgrades stay for the whole campaign.",
-			"Press Esc to pause or resume the game.",
+			"People are drowning. Rescue them with your boat.",
+			"Steer with WASD or the arrow keys. Aim the lighthouse with your mouse.",
+			"Press E to pick people up, and E at the harbor to drop them off.",
 		],
 	},
 ]
@@ -50,9 +26,6 @@ var lighthouse: Lighthouse
 var harbor: Harbor
 var people: Array[Survivor] = []
 var round_starts: int = 0
-var first_panel_rect := Rect2()
-var first_forward_rect := Rect2()
-var first_back_rect := Rect2()
 
 
 func _initialize() -> void:
@@ -69,6 +42,10 @@ func _run() -> void:
 	main = scene.instantiate()
 	root.add_child(main)
 	await process_frame
+	_expect(_node("LevelGrid") != null and main.get("_tutorial_open") == false, "Game startup opens the level map (main menu)")
+	_expect((_node("PlayButton_1") as Button) != null and not (_node("PlayButton_1") as Button).disabled and (_node("PlayButton_2") as Button).disabled,
+		"Only Level 1 can be played at the start")
+	(_node("PlayButton_1") as Button).pressed.emit()
 	manager = main.get("manager") as RescueGameManager
 	boat = main.get("boat") as RescueBoat
 	lighthouse = main.get("lighthouse") as Lighthouse
@@ -81,7 +58,7 @@ func _run() -> void:
 	manager.round_started.connect(func() -> void: round_starts += 1)
 	_check_tutorial_matches_game_rules()
 	await _check_startup()
-	await _check_forward_and_back()
+	await _check_single_page()
 	await _check_input_isolation()
 	await _check_launch()
 	await _check_pause_results_upgrade_and_replay()
@@ -95,8 +72,8 @@ func _check_tutorial_matches_game_rules() -> void:
 		durations_ok = durations_ok and is_equal_approx(person.visibility_memory_duration, 3.0)
 	_expect(manager.levels.size() == 5 and is_equal_approx(manager.level.time_limit, 240.0),
 		"Tutorial numbers match the rules: 5 levels and a 4-minute timer")
-	_expect(boat.capacity == 1 and manager.stars_per_survivor == 3 and durations_ok,
-		"Tutorial numbers match the rules: 1 starting seat, 3 stars per delivered survivor, 3 seconds of visibility memory")
+	_expect(boat.capacity == 1 and durations_ok,
+		"Tutorial numbers match the rules: 1 starting seat, 3 seconds of visibility memory")
 	var all_text := ""
 	for step: Dictionary in main.call("_tutorial_content"):
 		all_text += step["title"] + " " + " ".join(step["lines"]) + " "
@@ -105,7 +82,7 @@ func _check_tutorial_matches_game_rules() -> void:
 
 
 func _check_startup() -> void:
-	_expect(main.get("_tutorial_open") == true and main.get("_tutorial_step") == 0, "Game startup opens tutorial step 1")
+	_expect(main.get("_tutorial_open") == true and main.get("_tutorial_step") == 0, "Choosing Level 1 the first time opens the briefing")
 	_expect(not manager.round_active and round_starts == 0, "No round has started at startup")
 	await _expect_page(0)
 	await _expect_frozen("Step 1")
@@ -114,25 +91,13 @@ func _check_startup() -> void:
 	_expect(main.get("_tutorial_step") == 0, "Back cannot move before step 1")
 
 
-func _check_forward_and_back() -> void:
-	# The first trip uses real mouse clicks when a window exists, to exercise the buttons themselves.
-	for step in range(1, 4):
-		await _press(_node("TutorialNext") as Button)
-		_expect(main.get("_tutorial_step") == step, "Pressing Next advances exactly one step, to step %d" % (step + 1))
-		await _expect_page(step)
-		await _expect_frozen("Step %d" % (step + 1))
+func _check_single_page() -> void:
+	_expect((main.call("_tutorial_content") as Array).size() == 1, "The briefing is a single page")
 	main.call("_tutorial_next")
-	_expect(main.get("_tutorial_step") == 3 and _node("TutorialNext") == null, "Step 4 is the last page and has no Next")
-	for step in [2, 1, 0]:
-		await _press(_node("TutorialBack") as Button)
-		_expect(main.get("_tutorial_step") == step, "Pressing Back returns exactly one step, to step %d" % (step + 1))
-		await _expect_page(step)
-	# The second trip presses the buttons through their signal, as keyboard activation would.
-	for step in range(1, 4):
-		(_node("TutorialNext") as Button).pressed.emit()
-		_expect(main.get("_tutorial_step") == step, "Next works again after going back, to step %d" % (step + 1))
-		await _expect_page(step)
-	await _expect_frozen("After navigating forward and back")
+	_expect(main.get("_tutorial_step") == 0 and _node("TutorialNext") == null and _node("TutorialLaunch") != null,
+		"Next has nowhere to go; the page stays on Launch Rescue")
+	await _expect_page(0)
+	await _expect_frozen("After a stray Next")
 
 
 func _check_input_isolation() -> void:
@@ -150,7 +115,7 @@ func _check_input_isolation() -> void:
 	Input.action_release("move_up")
 	_expect(boat.global_position.is_equal_approx(spawn) and boat.velocity == Vector2.ZERO, "WASD cannot move the main boat behind the tutorial")
 	_expect(is_equal_approx(lighthouse.beam_angle, beam), "The mouse cannot aim the lighthouse behind the tutorial")
-	_expect(not paused and main.get("_tutorial_open") == true and main.get("_tutorial_step") == 3 and _node("TutorialLaunch") != null,
+	_expect(not paused and main.get("_tutorial_open") == true and main.get("_tutorial_step") == 0 and _node("TutorialLaunch") != null,
 		"Esc neither pauses the game nor dismisses the tutorial")
 	boat.global_position = person.global_position
 	_key(KEY_E)
@@ -165,7 +130,7 @@ func _check_input_isolation() -> void:
 
 func _check_launch() -> void:
 	var launch := _node("TutorialLaunch") as Button
-	_expect(launch != null and launch.text == "Launch Rescue", "Step 4 offers Launch Rescue")
+	_expect(launch != null and launch.text == "Launch Rescue", "The briefing offers Launch Rescue")
 	var starts := round_starts
 	await _press(launch)
 	launch.pressed.emit() # A stale second press must not start anything.
@@ -176,8 +141,10 @@ func _check_launch() -> void:
 		"Launch Rescue opens the 3-second countdown first, with no round running yet")
 	await _wait_for_intro()
 	_expect(round_starts == starts + 1, "Launch Rescue starts Level 1 exactly once")
-	_expect(manager.round_active and boat.controls_enabled and lighthouse.enabled and manager.level_number == 1 and people.size() == 1,
-		"Launch activates Level 1 (one survivor), the boat and the lighthouse")
+	_expect(manager.round_active and lighthouse.enabled and manager.level_number == 1 and people.size() == 2,
+		"Launch activates Level 1 (two survivors) and the lighthouse")
+	_expect(not boat.controls_enabled and not boat.visible and main.get("_awaiting_mouse") == true,
+		"In Level 1 the boat waits out of sight for the player's first mouse move")
 	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0, "The round begins with the full four minutes (at most a frame consumed)")
 	await _physics_frames(30)
 	_expect(manager.time_remaining < 240.0 and people[0].oxygen_remaining < people[0].oxygen_duration,
@@ -198,44 +165,53 @@ func _check_pause_results_upgrade_and_replay() -> void:
 	await _physics_frames(3)
 	_expect(manager.time_remaining < remaining, "The clock resumes after pause")
 
-	# Finish Level 1: deliver the one survivor. The level completes and offers the first upgrade.
+	# Finish Level 1: deliver both survivors. The level completes with its rating and points.
 	boat.global_position = harbor.global_position
 	_key(KEY_E)
-	_expect(manager.delivered_count == 1 and manager.result == RescueGameManager.Result.VICTORY and manager.level_stars == 3 and manager.stars == 3,
-		"Delivering the only Level 1 survivor wins the level and earns 3 stars")
-	_expect(_menu_contains("LEVEL 1 COMPLETE") and _menu_contains("You earned 3 stars!"), "The results screen shows LEVEL 1 COMPLETE with the stars earned")
-	var upgrade := _node("OfferButton_l1_capacity") as Button
-	_expect(upgrade != null and not upgrade.disabled and upgrade.text == "UPGRADE — 3 STARS", "Earned stars unlock the capacity upgrade in the popup")
-	upgrade.pressed.emit()
-	upgrade.pressed.emit() # A duplicate press must not buy twice.
-	_expect(manager.economy.capacity == 2 and manager.economy.stars == 0, "The upgrade is bought once, at its price")
+	_expect(manager.delivered_count == 1 and manager.round_active, "One of two delivered: Level 1 goes on")
+	boat.global_position = people[1].global_position
+	_key(KEY_E)
+	boat.global_position = harbor.global_position
+	_key(KEY_E)
+	_expect(manager.delivered_count == 2 and manager.result == RescueGameManager.Result.VICTORY and manager.level_stars == 3 and manager.points == 200,
+		"Delivering both Level 1 survivors quickly wins the level with 3 stars and 200 Light Points")
+	_expect(_menu_contains("LEVEL 1 COMPLETE") and _menu_contains("+200 Light Points"), "The results screen shows LEVEL 1 COMPLETE with the points earned")
+	var shop := _node("ShopButton") as Button
+	_expect(shop != null and not shop.disabled, "The results screen offers the SHOP")
+	shop.pressed.emit()
+	var seat := _node("BuyButton_capacity_1") as Button
+	_expect(seat != null and seat.disabled and seat.text == "LOCKED", "After Level 1 the Extra Seat is still locked (it unlocks at Level 4)")
+	(_node("ShopBack") as Button).pressed.emit()
+	_expect(manager.economy.capacity == 1 and manager.points == 200, "Nothing was bought; the points are kept")
 
 	var next: Button = _node("ContinueButton") as Button
-	_expect(next != null and next.text == "CONTINUE TO LEVEL 2", "After buying, the popup continues to Level 2")
+	_expect(next != null and next.text == "CONTINUE TO LEVEL 2", "Back on the results screen, Continue goes to Level 2")
 	var starts := round_starts
 	next.pressed.emit()
 	_expect(main.get("_intro_active") == true and not manager.round_active and round_starts == starts and manager.level_number == 2,
 		"Continue prepares Level 2 and runs the countdown before activating it")
 	await _wait_for_intro()
-	_expect(manager.round_active and round_starts == starts + 1 and manager.level_number == 2 and manager.survivors.size() == 2,
-		"Level 2 then starts with its two survivors")
+	_expect(manager.round_active and round_starts == starts + 1 and manager.level_number == 2 and manager.survivors.size() == 3,
+		"Level 2 then starts with its three survivors")
 	_expect(main.get("_tutorial_open") == false and main.get("_menu") == null and _node("TutorialTitle") == null,
 		"Continuing does not reopen the tutorial")
-	_expect(boat.capacity == 2, "The purchased capacity carries into Level 2")
+	_expect(boat.capacity == 1 and manager.points == 200, "Level 2 starts with one seat and the banked points")
 	# Fail Level 2 on the clock and replay it: the upgrade stays.
+	manager.level.time_limit_enabled = true # (fixture) levels ship without a time limit; it is a quick way to fail here
 	manager._process(manager.time_remaining)
+	manager.level.time_limit_enabled = false
 	_expect(not manager.round_active and manager.result == RescueGameManager.Result.TIME_RAN_OUT and _menu_contains("Time ran out"),
 		"The failure screen appears when the timer expires")
 	var replay := _node("ReplayButton") as Button
-	_expect(replay != null and replay.text == "REPLAY LEVEL 2", "The failure screen offers Replay Level 2")
+	_expect(replay != null and replay.text == "RETRY LEVEL 2", "The failure screen offers Retry Level 2")
 	starts = round_starts
 	replay.pressed.emit()
 	_expect(main.get("_intro_active") == true and not manager.round_active and round_starts == starts and manager.level_number == 2,
 		"Replay prepares Level 2 and runs the countdown before activating it")
 	await _wait_for_intro()
 	_expect(manager.round_active and round_starts == starts + 1 and manager.level_number == 2, "Replay then starts Level 2")
-	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0 and boat.capacity == 2,
-		"Replay restores the clock and keeps the purchased capacity")
+	_expect(manager.time_remaining > 239.9 and manager.time_remaining <= 240.0 and manager.points == 200,
+		"Replay restores the clock and keeps the points")
 
 
 ## Asserts one tutorial page: content, progress, buttons, layout and character coverage.
@@ -248,7 +224,7 @@ func _expect_page(step: int) -> void:
 	_expect(menu != null and main.get("_tutorial_open") == true and main.get("_tutorial_step") == step, "%s is the active page" % page)
 	if menu == null:
 		return
-	_expect((_node("TutorialStepLabel") as Label).text == "Step %d of 4" % (step + 1), "%s shows 'Step %d of 4'" % [page, step + 1])
+	_expect(_node("TutorialStepLabel") == null and _node("TutorialProgress") == null, "%s has no step counter or progress bar" % page)
 	_expect((_node("TutorialTitle") as Label).text == spec["title"], "%s is titled '%s'" % [page, spec["title"]])
 	var body := _node("TutorialBody") as Control
 	var shown: Array = []
@@ -256,28 +232,15 @@ func _expect_page(step: int) -> void:
 		shown.append(line.text)
 	_expect(shown == spec["lines"], "%s shows the required text" % page)
 
-	var segments := _node("TutorialProgress").get_children()
-	var states: Array[String] = []
-	var wanted: Array[String] = []
-	for index in range(4):
-		states.append(segments[index].get_meta("state") if index < segments.size() else "missing")
-		wanted.append("done" if index < step else ("current" if index == step else "upcoming"))
-	_expect(segments.size() == 4 and states == wanted, "%s progress segments read %s" % [page, ", ".join(wanted)])
-
 	var buttons := menu.find_children("*", "Button", true, false)
 	var names: Array[String] = []
 	var expected_names: Array[String] = []
 	for button in buttons:
 		names.append(button.name)
-	if step > 0:
-		expected_names.append("TutorialBack")
-	expected_names.append("TutorialLaunch" if step == 3 else "TutorialNext")
-	_expect(names == expected_names, "%s offers exactly %s" % [page, " + ".join(expected_names)])
-	var back := _node("TutorialBack") as Button
-	var forward := (_node("TutorialLaunch") if step == 3 else _node("TutorialNext")) as Button
-	_expect(back == null or (back.text == "Back" and back.icon != null), "%s Back carries a drawn left arrow" % page)
-	_expect(forward != null and (forward.text == "Launch Rescue" if step == 3 else (forward.text == "Next" and forward.icon != null)),
-		"%s forward button is %s" % [page, "Launch Rescue" if step == 3 else "Next with a drawn right arrow"])
+	expected_names.append("TutorialLaunch")
+	_expect(names == expected_names, "%s offers exactly Launch Rescue" % page)
+	var forward := _node("TutorialLaunch") as Button
+	_expect(forward != null and forward.text == "Launch Rescue", "%s forward button is Launch Rescue" % page)
 
 	# Layout: nothing overflows the modal or the 1152 x 648 base viewport, and buttons stay put.
 	var consts: Dictionary = main.get_script().get_script_constant_map()
@@ -291,15 +254,6 @@ func _expect_page(step: int) -> void:
 			and label.get_line_count() == label.get_visible_line_count()
 	fits = fits and body.get_minimum_size().y <= float(consts["TUTORIAL_BODY_HEIGHT"])
 	_expect(VIEWPORT.encloses(rect) and fits, "%s fits its modal and the base viewport without clipping" % page)
-	if step == 0:
-		first_panel_rect = rect
-		first_forward_rect = forward.get_global_rect()
-	if step == 1:
-		first_back_rect = back.get_global_rect()
-	_expect(rect.is_equal_approx(first_panel_rect) and forward.get_global_rect().is_equal_approx(first_forward_rect)
-		and (back == null or step == 0 or back.get_global_rect().is_equal_approx(first_back_rect)),
-		"%s keeps the modal and its buttons in the same place" % page)
-
 	# Web builds have no system fonts, so every character must come from the bundled font.
 	var missing := {}
 	for control: Control in menu.find_children("*", "Label", true, false) + buttons:
@@ -316,8 +270,8 @@ func _expect_frozen(context: String) -> void:
 	for person in people:
 		untouched = untouched and person.state == Survivor.State.ACTIVE and not person.discovered \
 			and is_equal_approx(person.oxygen_remaining, person.oxygen_duration)
-	var clock_text := ((main.get("_stat_labels") as Dictionary)["TIME"] as Label).text
-	_expect(is_equal_approx(manager.time_remaining, 240.0) and clock_text == "4:00", "%s: the timer stays at 4:00" % context)
+	_expect(is_equal_approx(manager.time_remaining, 240.0) and main.get("_stat_labels") == null,
+		"%s: the (hidden) level clock has not started" % context)
 	_expect(untouched, "%s: every oxygen tank stays full" % context)
 	_expect(not manager.round_active and not boat.controls_enabled and not lighthouse.enabled and boat.velocity == Vector2.ZERO and not paused,
 		"%s: the boat, the lighthouse and pause stay inactive" % context)
